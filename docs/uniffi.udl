@@ -1,0 +1,45 @@
+namespace keen;
+
+// UniFFI UDL skeleton for Rust ↔ Kotlin/Swift bindings
+
+enum Op {
+  add,
+  sub,
+  mul,
+  div,
+  eq,
+}
+
+record Cell {
+  uint8 row;
+  uint8 col;
+  uint8 value; // 0 for empty
+}
+
+record CageSpec {
+  sequence<Cell> cells;
+  Op op;
+  uint32 target;
+}
+
+record PuzzleSpec {
+  uint8 size; // 4..9
+  sequence<CageSpec> cages;
+}
+
+record PuzzleState {
+  sequence<uint8> cells; // flattened size*size, 0 empty
+}
+
+record DifficultyMetrics {
+  uint32 steps;
+  uint8 tier; // 0 easy .. 3 extreme
+}
+
+interface KeenEngine {
+  PuzzleState generate_puzzle(uint64 seed, uint8 size, uint8 difficulty);
+  optional<PuzzleState> solve_puzzle(PuzzleSpec spec, bool stepwise);
+  DifficultyMetrics estimate_difficulty(PuzzleSpec spec);
+  // Batch generation for parallel pipelines
+  sequence<PuzzleState> generate_batch(uint64 seed, uint8 size, uint8 difficulty, uint32 count);
+}
