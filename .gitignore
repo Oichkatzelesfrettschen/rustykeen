@@ -1,0 +1,22 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Workspace caches and local DBs
+/logs/
+mydatabase.db
+
+# Tooling/state
+/.claude/
+/.vscode/
+/.idea/
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Dependency locks (keep Cargo.lock for binaries; omit for libraries)
+# Uncomment if this is a library crate:
+# Cargo.lock
