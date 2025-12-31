@@ -19,4 +19,4 @@ Thumbs.db
 
 # Dependency locks (keep Cargo.lock for binaries; omit for libraries)
 # Uncomment if this is a library crate:
-# Cargo.lock
+Cargo.lock
