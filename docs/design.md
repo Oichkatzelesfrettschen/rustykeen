@@ -1,5 +1,7 @@
 # Design Specification
 
+Note: This file is a supporting sketch. The synthesized, reconciled plan lives in `docs/plan.md`.
+
 ## Models
 - Grid<N>: const generic N (4–9); cells have domain bitsets; cages: cell set, op ∈ {Add, Sub, Mul, Div, Eq}, target.
 - Constraints: cage op semantics; row/column all-different; domain bounds; optional inequalities.

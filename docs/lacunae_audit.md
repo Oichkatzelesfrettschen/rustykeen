@@ -8,6 +8,12 @@
 - UniFFI data model lacks enums for ops (currently strings).
 - Deterministic arithmetic (fixed-point) usage not wired.
 - Verification (creusot) optional but no spec harness.
+ - Docs claim “done” items that are not implemented in code yet (no workspace/crates).
+ - No repository-level “single source of truth” plan; docs overlap and occasionally diverge.
+ - No defined public API stability policy (semver, feature flags, versioned IO schema).
+ - No agreed “cleanroom evidence” workflow (what artifacts are allowed, where they live).
+ - No CI, no formatting/linting gates, no benchmark baselines, no fuzz/property harness wiring.
+ - Licensing file is not the actual GPLv2 text (current `LICENSE` is an HTML redirect).
 
 ## Resolutions/Plans
 - Use hybrid DLX+SAT: precompute bounded tuples; if |tuples|>threshold, switch to SAT pruning with varisat; document thresholds per N.
@@ -22,3 +28,6 @@
 - Implement DLX matrix builder and SAT encoder; add unit/property tests.
 - Generate UniFFI bindings; create Android sample app module.
 - Write difficulty grader; calibrate with sgt-puzzles outputs.
+- Bootstrap the workspace so the architecture becomes executable (minimal compiling crates).
+- Consolidate docs into a single plan and record decisions (see `docs/plan.md`).
+ - Distill upstream Keen formats/behavior and reconcile planned algorithms with upstream baseline (`docs/upstream_sgt_puzzles_keen.md`, `docs/lacunae_deep_dive.md`).

@@ -1,9 +1,24 @@
-# Crates Audit and 2026 Optimization Stack (2025-12-31T22:04:43Z)
+# Crates Audit and 2026 Optimization Stack (2026-01-01)
+
+Note: this file is an aspirational 2026 stack, but it now also records what is *actually integrated* in code today.
+For the canonical target list and per-crate upstream links, see `docs/crate_audit_list.md` and `docs/deps/README.md`.
 
 ## Master Crate List (comma-separated)
 uniffi, fixed, rkyv, smallvec, rand, rand_pcg, wide, dlx_rs, rayon, bumpalo, bitvec, varisat, dashmap, num-integer, petgraph, criterion, parking_lot, itertools, proptest, once_cell, mimalloc, anyhow, thiserror, nom, tracing, tracing-android, z3, bolero, kani, creusot
 
 ## Current Stack (audited)
+- Adopted now (feature-gated unless noted):
+  - `bumpalo` (`kenken-solver/alloc-bumpalo`) — solver propagation scratch arena (`kenken-solver/src/solver.rs`).
+  - `rayon` (`kenken-gen/parallel-rayon`) — batch count/uniqueness parallelism (`kenken-gen/src/lib.rs`).
+  - `dlx_rs` (`kenken-solver/solver-dlx`) — Latin-square exact cover (`kenken-solver/src/dlx_latin.rs`).
+  - `varisat` (`kenken-solver/sat-varisat`) — SAT uniqueness (Latin + staged cage allowlists) (`kenken-solver/src/sat_latin.rs`, `kenken-solver/src/sat_cages.rs`).
+  - `rkyv` (`kenken-io/io-rkyv`) — Snapshot v1 encode/decode (`kenken-io/src/rkyv_snapshot.rs`).
+  - `uniffi` (`kenken-uniffi/ffi-uniffi`) — bindings crate + scaffolding (`kenken-uniffi/*`).
+  - `mimalloc` (`kenken-cli/alloc-mimalloc`) — CLI opt-in global allocator (`kenken-cli/src/main.rs`).
+  - `bitvec` (`kenken-core/core-bitvec`) — `BitDomain` exists; solver still uses `u32` masks (`kenken-core/src/domain.rs`).
+  - `likely_stable` (`kenken-solver/perf-likely`) — branch hints hooked in solver hot paths (`kenken-solver/src/solver.rs`).
+  - `tracing` (`kenken-solver/tracing`) — optional hotpath events/spans (no subscriber installed by library).
+
 - uniffi: Kotlin/Swift bindings generation, avoids manual JNI.
 - fixed: Deterministic fixed-point arithmetic for cage math.
 - rkyv: Zero-copy snapshot/save-state; mmap-friendly.

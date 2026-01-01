@@ -1,0 +1,26 @@
+[package]
+name = "kenken-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kenken-core = { path = "../kenken-core" }
+thiserror.workspace = true
+rkyv = { version = "0.8", optional = true }
+
+[features]
+default = ["std"]
+std = []
+
+# Placeholders
+serde = []
+json = []
+toml = []
+io-nom = []
+io-rkyv = ["dep:rkyv"]
+format-sgt-desc = []

@@ -11,6 +11,9 @@ mydatabase.db
 /.vscode/
 /.idea/
 
+# Upstream snapshots / analysis artifacts (not committed)
+/third_party/
+
 # OS/editor junk
 .DS_Store
 Thumbs.db

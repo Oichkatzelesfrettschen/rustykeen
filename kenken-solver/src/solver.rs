@@ -1,0 +1,1635 @@
+//! Deterministic solver for `kenken-core` puzzles.
+//!
+//! Design goals:
+//! - **Deterministic**: stable ordering, no hash-iteration dependence.
+//! - **Library-first**: errors are typed (`SolveError`) and callers control policy.
+//! - **Performance-oriented**: optional arenas/instrumentation behind feature flags.
+//!
+//! Feature flags:
+//! - `tracing`: enables `tracing::trace!` in hot paths (no subscriber required by the library).
+//! - `perf-likely`: enables branch prediction hints via `likely_stable`.
+//! - `alloc-bumpalo`: uses `bumpalo` scratch arenas for propagation temporaries.
+//!
+use kenken_core::rules::{Op, Ruleset};
+use kenken_core::{Cage, CoreError, Puzzle};
+
+#[cfg(feature = "tracing")]
+use tracing::trace;
+
+#[cfg(not(feature = "tracing"))]
+macro_rules! trace {
+    ($($tt:tt)*) => {};
+}
+
+#[cfg(feature = "perf-likely")]
+use likely_stable::likely;
+
+#[cfg(not(feature = "perf-likely"))]
+fn likely(v: bool) -> bool {
+    v
+}
+
+#[cfg(feature = "alloc-bumpalo")]
+use bumpalo::Bump;
+
+use crate::error::SolveError;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Solution {
+    pub n: u8,
+    pub grid: Vec<u8>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SolveStats {
+    pub nodes_visited: u64,
+    pub assignments: u64,
+    pub max_depth: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DifficultyTier {
+    Easy,
+    Normal,
+    Hard,
+    Extreme,
+    Unreasonable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeductionTier {
+    None,
+    Easy,
+    Normal,
+    Hard,
+}
+
+/// Solve and return the first solution (if any).
+pub fn solve_one(puzzle: &Puzzle, rules: Ruleset) -> Result<Option<Solution>, SolveError> {
+    let mut first = None;
+    let count = search(puzzle, rules, 1, &mut first)?;
+    Ok(if count == 0 { None } else { first })
+}
+
+/// Solve and also return solver statistics for the search (nodes, assignments, depth).
+pub fn solve_one_with_stats(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<(Option<Solution>, SolveStats), SolveError> {
+    let mut first = None;
+    let mut stats = SolveStats::default();
+    let count = search_with_stats(puzzle, rules, 1, &mut first, &mut stats)?;
+    Ok((if count == 0 { None } else { first }, stats))
+}
+
+/// Solve with a selectable deduction tier (propagation strength).
+pub fn solve_one_with_deductions(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    tier: DeductionTier,
+) -> Result<Option<Solution>, SolveError> {
+    let mut first = None;
+    let mut stats = SolveStats::default();
+    let count = search_with_stats_deducing(puzzle, rules, tier, 1, &mut first, &mut stats)?;
+    Ok(if count == 0 { None } else { first })
+}
+
+/// Count solutions up to `limit` (use `2` to check uniqueness).
+pub fn count_solutions_up_to(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    limit: u32,
+) -> Result<u32, SolveError> {
+    if limit == 0 {
+        return Ok(0);
+    }
+    search(puzzle, rules, limit, &mut None)
+}
+
+/// Count solutions up to `limit` using a selectable deduction tier.
+///
+/// This is the primary “uniqueness check” building block for generator pipelines.
+pub fn count_solutions_up_to_with_deductions(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    tier: DeductionTier,
+    limit: u32,
+) -> Result<u32, SolveError> {
+    if limit == 0 {
+        return Ok(0);
+    }
+    let mut stats = SolveStats::default();
+    search_with_stats_deducing(puzzle, rules, tier, limit, &mut None, &mut stats)
+}
+
+fn search(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    limit: u32,
+    first: &mut Option<Solution>,
+) -> Result<u32, SolveError> {
+    let mut stats = SolveStats::default();
+    search_with_stats(puzzle, rules, limit, first, &mut stats)
+}
+
+fn search_with_stats(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    limit: u32,
+    first: &mut Option<Solution>,
+    stats: &mut SolveStats,
+) -> Result<u32, SolveError> {
+    puzzle.validate(rules)?;
+
+    let n = puzzle.n as usize;
+    let a = n * n;
+
+    let mut cage_of_cell = vec![usize::MAX; a];
+    for (cage_idx, cage) in puzzle.cages.iter().enumerate() {
+        for cell in &cage.cells {
+            cage_of_cell[cell.0 as usize] = cage_idx;
+        }
+    }
+
+    let mut state = State {
+        n: puzzle.n,
+        grid: vec![0; a],
+        row_mask: vec![0u32; n],
+        col_mask: vec![0u32; n],
+        cage_of_cell,
+    };
+
+    let mut count = 0u32;
+    backtrack(
+        puzzle, rules, limit, first, &mut state, &mut count, 0, stats,
+    )?;
+    Ok(count)
+}
+
+fn search_with_stats_deducing(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    tier: DeductionTier,
+    limit: u32,
+    first: &mut Option<Solution>,
+    stats: &mut SolveStats,
+) -> Result<u32, SolveError> {
+    puzzle.validate(rules)?;
+
+    let n = puzzle.n as usize;
+    let a = n * n;
+
+    let mut cage_of_cell = vec![usize::MAX; a];
+    for (cage_idx, cage) in puzzle.cages.iter().enumerate() {
+        for cell in &cage.cells {
+            cage_of_cell[cell.0 as usize] = cage_idx;
+        }
+    }
+
+    let mut state = State {
+        n: puzzle.n,
+        grid: vec![0; a],
+        row_mask: vec![0u32; n],
+        col_mask: vec![0u32; n],
+        cage_of_cell,
+    };
+
+    let mut forced = Vec::new();
+    if tier != DeductionTier::None && !propagate(puzzle, rules, tier, &mut state, &mut forced)? {
+        return Ok(0);
+    }
+
+    let mut count = 0u32;
+    backtrack_deducing(
+        puzzle, rules, tier, limit, first, &mut state, &mut count, 0, stats,
+    )?;
+    Ok(count)
+}
+
+struct State {
+    n: u8,
+    grid: Vec<u8>,
+    row_mask: Vec<u32>,
+    col_mask: Vec<u32>,
+    cage_of_cell: Vec<usize>,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn backtrack(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    limit: u32,
+    first: &mut Option<Solution>,
+    state: &mut State,
+    count: &mut u32,
+    depth: u32,
+    stats: &mut SolveStats,
+) -> Result<(), SolveError> {
+    if *count >= limit {
+        return Ok(());
+    }
+
+    stats.nodes_visited += 1;
+    stats.max_depth = stats.max_depth.max(depth);
+
+    let Some((cell_idx, domain)) = choose_mrv_cell(puzzle, state)? else {
+        // Solved
+        *count += 1;
+        if first.is_none() {
+            *first = Some(Solution {
+                n: state.n,
+                grid: state.grid.clone(),
+            });
+        }
+        return Ok(());
+    };
+
+    let row = cell_idx / (state.n as usize);
+    let col = cell_idx % (state.n as usize);
+
+    let mut mask = domain;
+    while mask != 0 {
+        let d = mask.trailing_zeros() as u8;
+        mask &= mask - 1;
+        if d == 0 {
+            continue;
+        }
+
+        trace!(cell = cell_idx, digit = d, "try");
+        place(state, row, col, d);
+        stats.assignments += 1;
+        if likely(cages_still_feasible(puzzle, rules, state, cell_idx)?) {
+            backtrack(puzzle, rules, limit, first, state, count, depth + 1, stats)?;
+        }
+        unplace(state, row, col, d);
+
+        if *count >= limit {
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn backtrack_deducing(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    tier: DeductionTier,
+    limit: u32,
+    first: &mut Option<Solution>,
+    state: &mut State,
+    count: &mut u32,
+    depth: u32,
+    stats: &mut SolveStats,
+) -> Result<(), SolveError> {
+    if *count >= limit {
+        return Ok(());
+    }
+
+    stats.nodes_visited += 1;
+    stats.max_depth = stats.max_depth.max(depth);
+
+    let Some((cell_idx, domain)) = choose_mrv_cell(puzzle, state)? else {
+        *count += 1;
+        if first.is_none() {
+            *first = Some(Solution {
+                n: state.n,
+                grid: state.grid.clone(),
+            });
+        }
+        return Ok(());
+    };
+
+    let row = cell_idx / (state.n as usize);
+    let col = cell_idx % (state.n as usize);
+
+    let mut mask = domain;
+    while mask != 0 {
+        let d = mask.trailing_zeros() as u8;
+        mask &= mask - 1;
+        if d == 0 {
+            continue;
+        }
+
+        place(state, row, col, d);
+        stats.assignments += 1;
+
+        let mut forced = Vec::new();
+        let feasible = cages_still_feasible(puzzle, rules, state, cell_idx)?
+            && if tier == DeductionTier::None {
+                true
+            } else {
+                propagate(puzzle, rules, tier, state, &mut forced)?
+            };
+
+        if likely(feasible) {
+            backtrack_deducing(
+                puzzle,
+                rules,
+                tier,
+                limit,
+                first,
+                state,
+                count,
+                depth + 1,
+                stats,
+            )?;
+        }
+
+        for (idx, val) in forced.into_iter().rev() {
+            let r = idx / (state.n as usize);
+            let c = idx % (state.n as usize);
+            unplace(state, r, c, val);
+        }
+
+        unplace(state, row, col, d);
+
+        if *count >= limit {
+            return Ok(());
+        }
+    }
+
+    Ok(())
+}
+
+pub fn classify_difficulty(stats: SolveStats) -> DifficultyTier {
+    // Provisional rubric: upstream parity requires a deduction-tiered solver.
+    // This is only a placeholder so we can build corpora and regressions early.
+    match stats.assignments {
+        0..=200 => DifficultyTier::Easy,
+        201..=2_000 => DifficultyTier::Normal,
+        2_001..=20_000 => DifficultyTier::Hard,
+        20_001..=200_000 => DifficultyTier::Extreme,
+        _ => DifficultyTier::Unreasonable,
+    }
+}
+
+fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u32)>, SolveError> {
+    let n = state.n as usize;
+    let a = n * n;
+    let mut best: Option<(usize, u32, u32)> = None; // (idx, domain, popcnt)
+
+    for idx in 0..a {
+        if state.grid[idx] != 0 {
+            continue;
+        }
+        let row = idx / n;
+        let col = idx % n;
+        let dom = domain_for_cell(puzzle, state, idx, row, col)?;
+        let pop = dom.count_ones();
+        if pop == 0 {
+            return Ok(None);
+        }
+        match best {
+            None => best = Some((idx, dom, pop)),
+            Some((_, _, best_pop)) if pop < best_pop => best = Some((idx, dom, pop)),
+            _ => {}
+        }
+        if best.is_some_and(|(_, _, p)| p == 1) {
+            break;
+        }
+    }
+
+    Ok(best.map(|(idx, dom, _)| (idx, dom)))
+}
+
+fn domain_for_cell(
+    puzzle: &Puzzle,
+    state: &State,
+    idx: usize,
+    row: usize,
+    col: usize,
+) -> Result<u32, CoreError> {
+    let n = state.n;
+    let mut dom = full_domain(n) & !state.row_mask[row] & !state.col_mask[col];
+
+    let cage = &puzzle.cages[state.cage_of_cell[idx]];
+    if cage.cells.len() == 1 && cage.op == Op::Eq {
+        if cage.target <= 0 || cage.target > n as i32 {
+            return Err(CoreError::EqTargetOutOfRange);
+        }
+        dom &= 1u32 << (cage.target as u32);
+    }
+
+    Ok(dom)
+}
+
+fn cages_still_feasible(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    state: &State,
+    changed_cell: usize,
+) -> Result<bool, SolveError> {
+    let cage_idx = state.cage_of_cell[changed_cell];
+    let cage = &puzzle.cages[cage_idx];
+    if !cage_feasible(puzzle, rules, state, cage)? {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+fn propagate(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    tier: DeductionTier,
+    state: &mut State,
+    forced: &mut Vec<(usize, u8)>,
+) -> Result<bool, SolveError> {
+    let n = state.n as usize;
+    let a = n * n;
+
+    #[cfg(feature = "alloc-bumpalo")]
+    let mut bump = Bump::new();
+
+    let mut domains = vec![0u32; a];
+
+    loop {
+        #[cfg(feature = "alloc-bumpalo")]
+        bump.reset();
+
+        domains.fill(0u32);
+        for (idx, dom_slot) in domains.iter_mut().enumerate() {
+            if state.grid[idx] != 0 {
+                *dom_slot = 1u32 << (state.grid[idx] as u32);
+                continue;
+            }
+            let r = idx / n;
+            let c = idx % n;
+            *dom_slot = full_domain(state.n) & !state.row_mask[r] & !state.col_mask[c];
+        }
+
+        for cage in &puzzle.cages {
+            #[cfg(feature = "alloc-bumpalo")]
+            apply_cage_deduction_with_bump(&bump, puzzle, rules, state, cage, tier, &mut domains)?;
+
+            #[cfg(not(feature = "alloc-bumpalo"))]
+            apply_cage_deduction(puzzle, rules, state, cage, tier, &mut domains)?;
+        }
+
+        for (idx, &dom) in domains.iter().enumerate() {
+            if state.grid[idx] == 0 && dom == 0 {
+                return Ok(false);
+            }
+        }
+
+        let mut any_forced = false;
+        for (idx, &dom) in domains.iter().enumerate() {
+            if state.grid[idx] != 0 {
+                continue;
+            }
+            if dom.count_ones() == 1 {
+                let val = dom.trailing_zeros() as u8;
+                let r = idx / n;
+                let c = idx % n;
+                place(state, r, c, val);
+                forced.push((idx, val));
+                any_forced = true;
+            }
+        }
+
+        if !any_forced {
+            return Ok(true);
+        }
+    }
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+fn apply_cage_deduction(
+    _puzzle: &Puzzle,
+    rules: Ruleset,
+    state: &State,
+    cage: &Cage,
+    tier: DeductionTier,
+    domains: &mut [u32],
+) -> Result<(), SolveError> {
+    let n = state.n as usize;
+    let a = n * n;
+    let cells: Vec<usize> = cage.cells.iter().map(|c| c.0 as usize).collect();
+
+    match cage.op {
+        Op::Eq => {
+            let idx = cells[0];
+            domains[idx] &= 1u32 << (cage.target as u32);
+            return Ok(());
+        }
+        Op::Sub | Op::Div if rules.sub_div_two_cell_only && cage.cells.len() != 2 => {
+            return Err(CoreError::SubDivMustBeTwoCell.into());
+        }
+        Op::Sub | Op::Div if cage.cells.len() == 2 => {
+            let a_idx = cells[0];
+            let b_idx = cells[1];
+            let a_dom = domains[a_idx];
+            let b_dom = domains[b_idx];
+            let mut a_ok = 0u32;
+            let mut b_ok = 0u32;
+            let mut found = false;
+            let mut must_row: Vec<Option<u32>> = vec![None; n];
+            let mut must_col: Vec<Option<u32>> = vec![None; n];
+            let coords = [(a_idx / n, a_idx % n), (b_idx / n, b_idx % n)];
+            for av in domain_iter(a_dom) {
+                for bv in domain_iter(b_dom) {
+                    let ok = match cage.op {
+                        Op::Sub => (av as i32 - bv as i32).abs() == cage.target,
+                        Op::Div => {
+                            let (num, den) = if av >= bv { (av, bv) } else { (bv, av) };
+                            den != 0 && (num as i32) == (den as i32).saturating_mul(cage.target)
+                        }
+                        _ => false,
+                    };
+                    if ok {
+                        found = true;
+                        a_ok |= 1u32 << (av as u32);
+                        b_ok |= 1u32 << (bv as u32);
+
+                        if tier == DeductionTier::Hard {
+                            let pair = [av, bv];
+                            let mut row_bits = vec![0u32; n];
+                            let mut col_bits = vec![0u32; n];
+                            for (i, &(r, c)) in coords.iter().enumerate() {
+                                row_bits[r] |= 1u32 << (pair[i] as u32);
+                                col_bits[c] |= 1u32 << (pair[i] as u32);
+                            }
+                            for r in 0..n {
+                                if row_bits[r] != 0 {
+                                    must_row[r] = Some(match must_row[r] {
+                                        None => row_bits[r],
+                                        Some(m) => m & row_bits[r],
+                                    });
+                                }
+                            }
+                            for c in 0..n {
+                                if col_bits[c] != 0 {
+                                    must_col[c] = Some(match must_col[c] {
+                                        None => col_bits[c],
+                                        Some(m) => m & col_bits[c],
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            domains[a_idx] &= a_ok;
+            domains[b_idx] &= b_ok;
+
+            if tier == DeductionTier::Hard && found {
+                let mut in_cage = vec![false; a];
+                in_cage[a_idx] = true;
+                in_cage[b_idx] = true;
+                for (r, maybe_must) in must_row.into_iter().enumerate() {
+                    let Some(must) = maybe_must else { continue };
+                    for c in 0..n {
+                        let idx = r * n + c;
+                        if !in_cage[idx] {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+                for (c, maybe_must) in must_col.into_iter().enumerate() {
+                    let Some(must) = maybe_must else { continue };
+                    for r in 0..n {
+                        let idx = r * n + c;
+                        if !in_cage[idx] {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+        Op::Add | Op::Mul => {
+            let coords: Vec<(usize, usize)> = cells.iter().map(|&idx| (idx / n, idx % n)).collect();
+            let (per_pos, any_mask, must_row, must_col, found) = if tier == DeductionTier::Hard {
+                enumerate_cage_tuples_with_must(n, cage, &cells, &coords, domains)
+            } else {
+                let mut per_pos = vec![0u32; cells.len()];
+                let mut any_mask = 0u32;
+                enumerate_cage_tuples(
+                    cage,
+                    &cells,
+                    &coords,
+                    domains,
+                    0,
+                    &mut Vec::new(),
+                    &mut per_pos,
+                    &mut any_mask,
+                );
+                (
+                    per_pos,
+                    any_mask,
+                    vec![0u32; n],
+                    vec![0u32; n],
+                    any_mask != 0,
+                )
+            };
+
+            if tier == DeductionTier::Easy {
+                for &idx in &cells {
+                    domains[idx] &= any_mask;
+                }
+            } else {
+                for (pos, &idx) in cells.iter().enumerate() {
+                    domains[idx] &= per_pos[pos];
+                }
+            }
+
+            if tier == DeductionTier::Hard && found {
+                let mut in_cage = vec![false; a];
+                for &idx in &cells {
+                    in_cage[idx] = true;
+                }
+                for (r, must) in must_row.into_iter().enumerate() {
+                    if must == 0 {
+                        continue;
+                    }
+                    for c in 0..n {
+                        let idx = r * n + c;
+                        if !in_cage[idx] {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+                for (c, must) in must_col.into_iter().enumerate() {
+                    if must == 0 {
+                        continue;
+                    }
+                    for r in 0..n {
+                        let idx = r * n + c;
+                        if !in_cage[idx] {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "alloc-bumpalo")]
+fn apply_cage_deduction_with_bump(
+    bump: &Bump,
+    _puzzle: &Puzzle,
+    rules: Ruleset,
+    state: &State,
+    cage: &Cage,
+    tier: DeductionTier,
+    domains: &mut [u32],
+) -> Result<(), SolveError> {
+    // Use bump-allocated temporary vectors to reduce per-iteration heap churn in propagation.
+    let n = state.n as usize;
+    let a = n * n;
+    let mut cells = bumpalo::collections::Vec::with_capacity_in(cage.cells.len(), bump);
+    for c in &cage.cells {
+        cells.push(c.0 as usize);
+    }
+
+    match cage.op {
+        Op::Eq => {
+            let idx = cells[0];
+            domains[idx] &= 1u32 << (cage.target as u32);
+            return Ok(());
+        }
+        Op::Sub | Op::Div if rules.sub_div_two_cell_only && cage.cells.len() != 2 => {
+            return Err(CoreError::SubDivMustBeTwoCell.into());
+        }
+        Op::Sub | Op::Div if cage.cells.len() == 2 => {
+            // Delegate to the existing implementation, but avoid allocating the `cells` Vec on the heap.
+            let a_idx = cells[0];
+            let b_idx = cells[1];
+            let a_dom = domains[a_idx];
+            let b_dom = domains[b_idx];
+            let mut a_ok = 0u32;
+            let mut b_ok = 0u32;
+            let mut found = false;
+            let mut must_row: bumpalo::collections::Vec<Option<u32>> =
+                bumpalo::collections::Vec::with_capacity_in(n, bump);
+            let mut must_col: bumpalo::collections::Vec<Option<u32>> =
+                bumpalo::collections::Vec::with_capacity_in(n, bump);
+            must_row.resize(n, None);
+            must_col.resize(n, None);
+            let coords = [(a_idx / n, a_idx % n), (b_idx / n, b_idx % n)];
+            for av in domain_iter(a_dom) {
+                for bv in domain_iter(b_dom) {
+                    let ok = match cage.op {
+                        Op::Sub => (av as i32 - bv as i32).abs() == cage.target,
+                        Op::Div => {
+                            let (num, den) = if av >= bv { (av, bv) } else { (bv, av) };
+                            den != 0 && (num as i32) == (den as i32).saturating_mul(cage.target)
+                        }
+                        _ => false,
+                    };
+                    if ok {
+                        found = true;
+                        a_ok |= 1u32 << (av as u32);
+                        b_ok |= 1u32 << (bv as u32);
+
+                        if tier == DeductionTier::Hard {
+                            let (ra, ca) = coords[0];
+                            let (rb, cb) = coords[1];
+                            let a_bit = 1u32 << (av as u32);
+                            let b_bit = 1u32 << (bv as u32);
+
+                            if ra == rb {
+                                let bits = a_bit | b_bit;
+                                must_row[ra] = Some(match must_row[ra] {
+                                    None => bits,
+                                    Some(m) => m & bits,
+                                });
+                            } else {
+                                must_row[ra] = Some(match must_row[ra] {
+                                    None => a_bit,
+                                    Some(m) => m & a_bit,
+                                });
+                                must_row[rb] = Some(match must_row[rb] {
+                                    None => b_bit,
+                                    Some(m) => m & b_bit,
+                                });
+                            }
+
+                            if ca == cb {
+                                let bits = a_bit | b_bit;
+                                must_col[ca] = Some(match must_col[ca] {
+                                    None => bits,
+                                    Some(m) => m & bits,
+                                });
+                            } else {
+                                must_col[ca] = Some(match must_col[ca] {
+                                    None => a_bit,
+                                    Some(m) => m & a_bit,
+                                });
+                                must_col[cb] = Some(match must_col[cb] {
+                                    None => b_bit,
+                                    Some(m) => m & b_bit,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            domains[a_idx] &= a_ok;
+            domains[b_idx] &= b_ok;
+
+            if tier == DeductionTier::Hard && found {
+                for (r, maybe_must) in must_row.into_iter().enumerate() {
+                    let Some(must) = maybe_must else { continue };
+                    for c in 0..n {
+                        let idx = r * n + c;
+                        if idx != a_idx && idx != b_idx {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+                for (c, maybe_must) in must_col.into_iter().enumerate() {
+                    let Some(must) = maybe_must else { continue };
+                    for r in 0..n {
+                        let idx = r * n + c;
+                        if idx != a_idx && idx != b_idx {
+                            domains[idx] &= !must;
+                        }
+                    }
+                }
+            }
+
+            return Ok(());
+        }
+        Op::Add | Op::Mul => {
+            let mut coords = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
+            for &idx in cells.iter() {
+                coords.push((idx / n, idx % n));
+            }
+
+            if tier == DeductionTier::Hard {
+                let mut per_pos = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
+                per_pos.resize(cells.len(), 0u32);
+                let mut any_mask = 0u32;
+                let mut must_row: bumpalo::collections::Vec<Option<u32>> =
+                    bumpalo::collections::Vec::with_capacity_in(n, bump);
+                let mut must_col: bumpalo::collections::Vec<Option<u32>> =
+                    bumpalo::collections::Vec::with_capacity_in(n, bump);
+                must_row.resize(n, None);
+                must_col.resize(n, None);
+                let mut found = false;
+
+                let mut chosen = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
+                let mut row_bits = bumpalo::collections::Vec::with_capacity_in(n, bump);
+                let mut col_bits = bumpalo::collections::Vec::with_capacity_in(n, bump);
+                row_bits.resize(n, 0u32);
+                col_bits.resize(n, 0u32);
+
+                enumerate_cage_tuples_collect_bump(
+                    n,
+                    cage,
+                    &cells,
+                    &coords,
+                    domains,
+                    0,
+                    &mut chosen,
+                    &mut per_pos,
+                    &mut any_mask,
+                    &mut must_row,
+                    &mut must_col,
+                    &mut found,
+                    &mut row_bits,
+                    &mut col_bits,
+                );
+
+                for (pos, &idx) in cells.iter().enumerate() {
+                    domains[idx] &= per_pos[pos];
+                }
+
+                if found {
+                    let mut in_cage = bumpalo::collections::Vec::with_capacity_in(a, bump);
+                    in_cage.resize(a, false);
+                    for &idx in &cells {
+                        in_cage[idx] = true;
+                    }
+
+                    for (r, maybe_must) in must_row.into_iter().enumerate() {
+                        let Some(must) = maybe_must else { continue };
+                        if must == 0 {
+                            continue;
+                        }
+                        for c in 0..n {
+                            let idx = r * n + c;
+                            if !in_cage[idx] {
+                                domains[idx] &= !must;
+                            }
+                        }
+                    }
+                    for (c, maybe_must) in must_col.into_iter().enumerate() {
+                        let Some(must) = maybe_must else { continue };
+                        if must == 0 {
+                            continue;
+                        }
+                        for r in 0..n {
+                            let idx = r * n + c;
+                            if !in_cage[idx] {
+                                domains[idx] &= !must;
+                            }
+                        }
+                    }
+                }
+
+                return Ok(());
+            }
+
+            // Easy/Normal tier: no "must" elimination needed.
+            let mut per_pos = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
+            per_pos.resize(cells.len(), 0u32);
+            let mut any_mask = 0u32;
+            let mut chosen = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
+            enumerate_cage_tuples_bump(
+                cage,
+                &cells,
+                &coords,
+                domains,
+                0,
+                &mut chosen,
+                &mut per_pos,
+                &mut any_mask,
+            );
+
+            if tier == DeductionTier::Easy {
+                for &idx in &cells {
+                    domains[idx] &= any_mask;
+                }
+            } else {
+                for (pos, &idx) in cells.iter().enumerate() {
+                    domains[idx] &= per_pos[pos];
+                }
+            }
+
+            return Ok(());
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "alloc-bumpalo")]
+#[allow(clippy::too_many_arguments)]
+fn enumerate_cage_tuples_bump(
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u32],
+    pos: usize,
+    chosen: &mut bumpalo::collections::Vec<u8>,
+    per_pos: &mut [u32],
+    any_mask: &mut u32,
+) {
+    if pos == cells.len() {
+        if cage_tuple_satisfies(cage, chosen) {
+            for (i, &v) in chosen.iter().enumerate() {
+                per_pos[i] |= 1u32 << (v as u32);
+                *any_mask |= 1u32 << (v as u32);
+            }
+        }
+        return;
+    }
+
+    let idx = cells[pos];
+    for v in domain_iter(domains[idx]) {
+        if violates_in_cage_rowcol(coords, chosen, pos, v) {
+            continue;
+        }
+        chosen.push(v);
+
+        if cage.op == Op::Add {
+            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
+            if sum <= cage.target {
+                enumerate_cage_tuples_bump(
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                );
+            }
+        } else if cage.op == Op::Mul {
+            let mut prod: i32 = 1;
+            for &x in chosen.iter() {
+                prod = prod.saturating_mul(x as i32);
+            }
+            if prod != 0 && cage.target % prod == 0 {
+                enumerate_cage_tuples_bump(
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                );
+            }
+        } else {
+            enumerate_cage_tuples_bump(
+                cage,
+                cells,
+                coords,
+                domains,
+                pos + 1,
+                chosen,
+                per_pos,
+                any_mask,
+            );
+        }
+
+        chosen.pop();
+    }
+}
+
+#[cfg(feature = "alloc-bumpalo")]
+#[allow(clippy::too_many_arguments)]
+fn enumerate_cage_tuples_collect_bump(
+    n: usize,
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u32],
+    pos: usize,
+    chosen: &mut bumpalo::collections::Vec<u8>,
+    per_pos: &mut [u32],
+    any_mask: &mut u32,
+    must_row: &mut [Option<u32>],
+    must_col: &mut [Option<u32>],
+    found: &mut bool,
+    row_bits: &mut [u32],
+    col_bits: &mut [u32],
+) {
+    if pos == cells.len() {
+        if cage_tuple_satisfies(cage, chosen) {
+            *found = true;
+            for (i, &v) in chosen.iter().enumerate() {
+                per_pos[i] |= 1u32 << (v as u32);
+                *any_mask |= 1u32 << (v as u32);
+            }
+
+            row_bits.fill(0u32);
+            col_bits.fill(0u32);
+            for (i, &(r, c)) in coords.iter().enumerate() {
+                row_bits[r] |= 1u32 << (chosen[i] as u32);
+                col_bits[c] |= 1u32 << (chosen[i] as u32);
+            }
+            for r in 0..n {
+                if row_bits[r] != 0 {
+                    must_row[r] = Some(match must_row[r] {
+                        None => row_bits[r],
+                        Some(m) => m & row_bits[r],
+                    });
+                }
+            }
+            for c in 0..n {
+                if col_bits[c] != 0 {
+                    must_col[c] = Some(match must_col[c] {
+                        None => col_bits[c],
+                        Some(m) => m & col_bits[c],
+                    });
+                }
+            }
+        }
+        return;
+    }
+
+    let idx = cells[pos];
+    for v in domain_iter(domains[idx]) {
+        if violates_in_cage_rowcol(coords, chosen, pos, v) {
+            continue;
+        }
+        chosen.push(v);
+
+        if cage.op == Op::Add {
+            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
+            if sum <= cage.target {
+                enumerate_cage_tuples_collect_bump(
+                    n,
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                    must_row,
+                    must_col,
+                    found,
+                    row_bits,
+                    col_bits,
+                );
+            }
+        } else if cage.op == Op::Mul {
+            let mut prod: i32 = 1;
+            for &x in chosen.iter() {
+                prod = prod.saturating_mul(x as i32);
+            }
+            if prod != 0 && cage.target % prod == 0 {
+                enumerate_cage_tuples_collect_bump(
+                    n,
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                    must_row,
+                    must_col,
+                    found,
+                    row_bits,
+                    col_bits,
+                );
+            }
+        } else {
+            enumerate_cage_tuples_collect_bump(
+                n,
+                cage,
+                cells,
+                coords,
+                domains,
+                pos + 1,
+                chosen,
+                per_pos,
+                any_mask,
+                must_row,
+                must_col,
+                found,
+                row_bits,
+                col_bits,
+            );
+        }
+
+        chosen.pop();
+    }
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+#[allow(clippy::too_many_arguments)]
+fn enumerate_cage_tuples(
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u32],
+    pos: usize,
+    chosen: &mut Vec<u8>,
+    per_pos: &mut [u32],
+    any_mask: &mut u32,
+) {
+    if pos == cells.len() {
+        if cage_tuple_satisfies(cage, chosen) {
+            for (i, &v) in chosen.iter().enumerate() {
+                per_pos[i] |= 1u32 << (v as u32);
+                *any_mask |= 1u32 << (v as u32);
+            }
+        }
+        return;
+    }
+
+    let idx = cells[pos];
+    for v in domain_iter(domains[idx]) {
+        if violates_in_cage_rowcol(coords, chosen, pos, v) {
+            continue;
+        }
+        chosen.push(v);
+
+        if cage.op == Op::Add {
+            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
+            if sum <= cage.target {
+                enumerate_cage_tuples(
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                );
+            }
+        } else if cage.op == Op::Mul {
+            let mut prod: i32 = 1;
+            for &x in chosen.iter() {
+                prod = prod.saturating_mul(x as i32);
+            }
+            if prod != 0 && cage.target % prod == 0 {
+                enumerate_cage_tuples(
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                );
+            }
+        } else {
+            enumerate_cage_tuples(
+                cage,
+                cells,
+                coords,
+                domains,
+                pos + 1,
+                chosen,
+                per_pos,
+                any_mask,
+            );
+        }
+
+        chosen.pop();
+    }
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+fn enumerate_cage_tuples_with_must(
+    n: usize,
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u32],
+) -> (Vec<u32>, u32, Vec<u32>, Vec<u32>, bool) {
+    let mut per_pos = vec![0u32; cells.len()];
+    let mut any_mask = 0u32;
+    let mut must_row: Vec<Option<u32>> = vec![None; n];
+    let mut must_col: Vec<Option<u32>> = vec![None; n];
+    let mut found = false;
+
+    enumerate_cage_tuples_collect(
+        n,
+        cage,
+        cells,
+        coords,
+        domains,
+        0,
+        &mut Vec::new(),
+        &mut per_pos,
+        &mut any_mask,
+        &mut must_row,
+        &mut must_col,
+        &mut found,
+    );
+
+    let must_row = must_row.into_iter().map(|m| m.unwrap_or(0)).collect();
+    let must_col = must_col.into_iter().map(|m| m.unwrap_or(0)).collect();
+    (per_pos, any_mask, must_row, must_col, found)
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+#[allow(clippy::too_many_arguments)]
+fn enumerate_cage_tuples_collect(
+    n: usize,
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u32],
+    pos: usize,
+    chosen: &mut Vec<u8>,
+    per_pos: &mut [u32],
+    any_mask: &mut u32,
+    must_row: &mut [Option<u32>],
+    must_col: &mut [Option<u32>],
+    found: &mut bool,
+) {
+    if pos == cells.len() {
+        if cage_tuple_satisfies(cage, chosen) {
+            *found = true;
+            for (i, &v) in chosen.iter().enumerate() {
+                per_pos[i] |= 1u32 << (v as u32);
+                *any_mask |= 1u32 << (v as u32);
+            }
+
+            let mut row_bits = vec![0u32; n];
+            let mut col_bits = vec![0u32; n];
+            for (i, &(r, c)) in coords.iter().enumerate() {
+                row_bits[r] |= 1u32 << (chosen[i] as u32);
+                col_bits[c] |= 1u32 << (chosen[i] as u32);
+            }
+            for r in 0..n {
+                if row_bits[r] != 0 {
+                    must_row[r] = Some(match must_row[r] {
+                        None => row_bits[r],
+                        Some(m) => m & row_bits[r],
+                    });
+                }
+            }
+            for c in 0..n {
+                if col_bits[c] != 0 {
+                    must_col[c] = Some(match must_col[c] {
+                        None => col_bits[c],
+                        Some(m) => m & col_bits[c],
+                    });
+                }
+            }
+        }
+        return;
+    }
+
+    let idx = cells[pos];
+    for v in domain_iter(domains[idx]) {
+        if violates_in_cage_rowcol(coords, chosen, pos, v) {
+            continue;
+        }
+        chosen.push(v);
+
+        if cage.op == Op::Add {
+            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
+            if sum <= cage.target {
+                enumerate_cage_tuples_collect(
+                    n,
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                    must_row,
+                    must_col,
+                    found,
+                );
+            }
+        } else if cage.op == Op::Mul {
+            let mut prod: i32 = 1;
+            for &x in chosen.iter() {
+                prod = prod.saturating_mul(x as i32);
+            }
+            if prod != 0 && cage.target % prod == 0 {
+                enumerate_cage_tuples_collect(
+                    n,
+                    cage,
+                    cells,
+                    coords,
+                    domains,
+                    pos + 1,
+                    chosen,
+                    per_pos,
+                    any_mask,
+                    must_row,
+                    must_col,
+                    found,
+                );
+            }
+        } else {
+            enumerate_cage_tuples_collect(
+                n,
+                cage,
+                cells,
+                coords,
+                domains,
+                pos + 1,
+                chosen,
+                per_pos,
+                any_mask,
+                must_row,
+                must_col,
+                found,
+            );
+        }
+
+        chosen.pop();
+    }
+}
+
+fn cage_tuple_satisfies(cage: &Cage, values: &[u8]) -> bool {
+    match cage.op {
+        Op::Add => values.iter().map(|&v| v as i32).sum::<i32>() == cage.target,
+        Op::Mul => values.iter().map(|&v| v as i32).product::<i32>() == cage.target,
+        _ => false,
+    }
+}
+
+fn violates_in_cage_rowcol(coords: &[(usize, usize)], chosen: &[u8], pos: usize, v: u8) -> bool {
+    let (r, c) = coords[pos];
+    for (i, &prev) in chosen.iter().enumerate() {
+        let (pr, pc) = coords[i];
+        if (pr == r || pc == c) && prev == v {
+            return true;
+        }
+    }
+    false
+}
+
+fn cage_feasible(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+    state: &State,
+    cage: &Cage,
+) -> Result<bool, SolveError> {
+    let n = state.n as usize;
+    let mut assigned: Vec<i32> = Vec::new();
+    let mut unassigned: Vec<usize> = Vec::new();
+
+    for cell in &cage.cells {
+        let idx = cell.0 as usize;
+        let v = state.grid[idx];
+        if v == 0 {
+            unassigned.push(idx);
+        } else {
+            assigned.push(v as i32);
+        }
+    }
+
+    match cage.op {
+        Op::Eq => {
+            if cage.cells.len() != 1 {
+                return Err(CoreError::InvalidOpForCageSize {
+                    op: cage.op,
+                    len: cage.cells.len(),
+                }
+                .into());
+            }
+            let t = cage.target;
+            if assigned.is_empty() {
+                return Ok(true);
+            }
+            return Ok(assigned[0] == t);
+        }
+        Op::Sub | Op::Div if rules.sub_div_two_cell_only && cage.cells.len() != 2 => {
+            return Err(CoreError::SubDivMustBeTwoCell.into());
+        }
+        _ => {}
+    }
+
+    if unassigned.is_empty() {
+        return Ok(cage_satisfied(cage, &assigned));
+    }
+
+    match cage.op {
+        Op::Sub => {
+            // Two-cell only: check existence against remaining domain.
+            let (a_idx, b_idx) = (cage.cells[0].0 as usize, cage.cells[1].0 as usize);
+            Ok(two_cell_sub_feasible(
+                puzzle,
+                state,
+                a_idx,
+                b_idx,
+                cage.target,
+            )?)
+        }
+        Op::Div => {
+            let (a_idx, b_idx) = (cage.cells[0].0 as usize, cage.cells[1].0 as usize);
+            Ok(two_cell_div_feasible(
+                puzzle,
+                state,
+                a_idx,
+                b_idx,
+                cage.target,
+            )?)
+        }
+        Op::Add => {
+            let sum_assigned: i32 = assigned.iter().sum();
+            if sum_assigned > cage.target {
+                return Ok(false);
+            }
+            let mut min_remaining = 0i32;
+            let mut max_remaining = 0i32;
+            for &idx in &unassigned {
+                let row = idx / n;
+                let col = idx % n;
+                let dom = domain_for_cell(puzzle, state, idx, row, col)?;
+                let (mn, mx) =
+                    domain_min_max(dom).ok_or(SolveError::Core(CoreError::TargetMustBeNonZero))?;
+                min_remaining += mn as i32;
+                max_remaining += mx as i32;
+            }
+            let t = cage.target;
+            Ok(sum_assigned + min_remaining <= t && t <= sum_assigned + max_remaining)
+        }
+        Op::Mul => {
+            let mut prod_assigned: i32 = 1;
+            for &v in &assigned {
+                prod_assigned = prod_assigned.saturating_mul(v);
+            }
+            if prod_assigned == 0 || cage.target % prod_assigned != 0 {
+                return Ok(false);
+            }
+            let mut min_prod: i32 = 1;
+            let mut max_prod: i32 = 1;
+            for &idx in &unassigned {
+                let row = idx / n;
+                let col = idx % n;
+                let dom = domain_for_cell(puzzle, state, idx, row, col)?;
+                let (mn, mx) =
+                    domain_min_max(dom).ok_or(SolveError::Core(CoreError::TargetMustBeNonZero))?;
+                min_prod = min_prod.saturating_mul(mn as i32);
+                max_prod = max_prod.saturating_mul(mx as i32);
+            }
+            let t = cage.target;
+            Ok(prod_assigned.saturating_mul(min_prod) <= t
+                && t <= prod_assigned.saturating_mul(max_prod))
+        }
+        Op::Eq => unreachable!("Eq cages are handled earlier in cage_feasible"),
+    }
+}
+
+fn cage_satisfied(cage: &Cage, values: &[i32]) -> bool {
+    match cage.op {
+        Op::Eq => values.len() == 1 && values[0] == cage.target,
+        Op::Add => values.iter().sum::<i32>() == cage.target,
+        Op::Mul => values.iter().product::<i32>() == cage.target,
+        Op::Sub => values.len() == 2 && (values[0] - values[1]).abs() == cage.target,
+        Op::Div => {
+            if values.len() != 2 {
+                return false;
+            }
+            let a = values[0].max(values[1]);
+            let b = values[0].min(values[1]);
+            b != 0 && a % b == 0 && a / b == cage.target
+        }
+    }
+}
+
+fn two_cell_sub_feasible(
+    puzzle: &Puzzle,
+    state: &State,
+    a: usize,
+    b: usize,
+    target: i32,
+) -> Result<bool, CoreError> {
+    let n = state.n as usize;
+    let av = state.grid[a];
+    let bv = state.grid[b];
+    match (av, bv) {
+        (0, 0) => Ok(true),
+        (x, 0) => {
+            let row = b / n;
+            let col = b % n;
+            let dom = domain_for_cell(puzzle, state, b, row, col)?;
+            Ok(domain_iter(dom).any(|y| (x as i32 - y as i32).abs() == target))
+        }
+        (0, y) => {
+            let row = a / n;
+            let col = a % n;
+            let dom = domain_for_cell(puzzle, state, a, row, col)?;
+            Ok(domain_iter(dom).any(|x| (x as i32 - y as i32).abs() == target))
+        }
+        (x, y) => Ok((x as i32 - y as i32).abs() == target),
+    }
+}
+
+fn two_cell_div_feasible(
+    puzzle: &Puzzle,
+    state: &State,
+    a: usize,
+    b: usize,
+    target: i32,
+) -> Result<bool, CoreError> {
+    let n = state.n as usize;
+    let av = state.grid[a];
+    let bv = state.grid[b];
+    let ok_pair = |x: u8, y: u8| {
+        let (num, den) = if x >= y { (x, y) } else { (y, x) };
+        den != 0 && (num as i32) == (den as i32).saturating_mul(target)
+    };
+    match (av, bv) {
+        (0, 0) => Ok(true),
+        (x, 0) => {
+            let row = b / n;
+            let col = b % n;
+            let dom = domain_for_cell(puzzle, state, b, row, col)?;
+            Ok(domain_iter(dom).any(|y| ok_pair(x, y)))
+        }
+        (0, y) => {
+            let row = a / n;
+            let col = a % n;
+            let dom = domain_for_cell(puzzle, state, a, row, col)?;
+            Ok(domain_iter(dom).any(|x| ok_pair(x, y)))
+        }
+        (x, y) => Ok(ok_pair(x, y)),
+    }
+}
+
+fn place(state: &mut State, row: usize, col: usize, d: u8) {
+    let idx = row * (state.n as usize) + col;
+    state.grid[idx] = d;
+    state.row_mask[row] |= 1u32 << (d as u32);
+    state.col_mask[col] |= 1u32 << (d as u32);
+}
+
+fn unplace(state: &mut State, row: usize, col: usize, d: u8) {
+    let idx = row * (state.n as usize) + col;
+    state.grid[idx] = 0;
+    state.row_mask[row] &= !(1u32 << (d as u32));
+    state.col_mask[col] &= !(1u32 << (d as u32));
+}
+
+fn full_domain(n: u8) -> u32 {
+    // bits 1..=n set
+    if n >= 31 {
+        u32::MAX
+    } else {
+        ((1u32 << (n as u32 + 1)) - 1) & !1u32
+    }
+}
+
+fn domain_min_max(dom: u32) -> Option<(u8, u8)> {
+    if dom == 0 {
+        return None;
+    }
+    let min = dom.trailing_zeros() as u8;
+    let max = (31 - dom.leading_zeros()) as u8;
+    Some((min, max))
+}
+
+fn domain_iter(dom: u32) -> impl Iterator<Item = u8> {
+    let mut mask = dom;
+    core::iter::from_fn(move || {
+        if mask == 0 {
+            return None;
+        }
+        let bit = mask.trailing_zeros();
+        mask &= mask - 1;
+        Some(bit as u8)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use kenken_core::format::sgt_desc::parse_keen_desc;
+
+    use super::*;
+
+    #[test]
+    fn counts_two_solutions_for_simple_2x2() {
+        let p = parse_keen_desc(2, "b__,a3a3").unwrap();
+        let count = count_solutions_up_to(&p, Ruleset::keen_baseline(), 2).unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn stops_counting_at_limit() {
+        let p = parse_keen_desc(2, "b__,a3a3").unwrap();
+        let count = count_solutions_up_to(&p, Ruleset::keen_baseline(), 1).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn solve_one_returns_a_solution_when_one_exists() {
+        let p = parse_keen_desc(2, "b__,a3a3").unwrap();
+        let sol = solve_one(&p, Ruleset::keen_baseline()).unwrap().unwrap();
+        assert_eq!(sol.n, 2);
+        assert_eq!(sol.grid.len(), 4);
+    }
+
+    #[test]
+    fn solve_one_with_deductions_works() {
+        let p = parse_keen_desc(2, "b__,a3a3").unwrap();
+        let sol = solve_one_with_deductions(&p, Ruleset::keen_baseline(), DeductionTier::Hard)
+            .unwrap()
+            .unwrap();
+        assert_eq!(sol.n, 2);
+        assert_eq!(sol.grid.len(), 4);
+    }
+}

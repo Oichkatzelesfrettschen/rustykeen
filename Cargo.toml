@@ -1,0 +1,29 @@
+[workspace]
+members = [
+  "kenken-core",
+  "kenken-gen",
+  "kenken-io",
+  "kenken-solver",
+  "kenken-uniffi",
+  "kenken-cli",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+version = "0.0.0"
+license = "GPL-2.0-only"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+thiserror = "2"
+rand = "0.9"
+rand_chacha = "0.9"
+smallvec = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+tracing = "0.1"

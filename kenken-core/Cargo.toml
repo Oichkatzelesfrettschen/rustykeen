@@ -1,0 +1,24 @@
+[package]
+name = "kenken-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true, optional = true }
+smallvec.workspace = true
+thiserror.workspace = true
+bitvec = { version = "1", optional = true }
+static_assertions = { version = "1", optional = true }
+
+[features]
+default = ["std", "format-sgt-desc"]
+std = []
+serde = ["dep:serde"]
+format-sgt-desc = []
+core-bitvec = ["dep:bitvec"]
+perf-assertions = ["dep:static_assertions"]

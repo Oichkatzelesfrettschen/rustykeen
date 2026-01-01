@@ -21,6 +21,7 @@ bitvec = "1"
 fixedbitset = "0.5"
 smallvec = "1"
 rand = "0.9"
+rand_chacha = "0.9"
 rand_pcg = "0.3"
 uniffi = "0.24"
 rayon = "1"
@@ -44,6 +45,11 @@ tracing-subscriber = "0.3"
 tracing-android = { version = "0.1", optional = true }
 tracing-oslog = { version = "0.1", optional = true }
 tracing-tracy = { version = "0.11", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+insta = { version = "1", optional = true }
 z3 = { version = "0.12", optional = true }
 bolero = { version = "0.10", optional = true }
 kani = { version = "0.50", optional = true }
@@ -60,6 +66,7 @@ bench = ["criterion"]
 fuzz = ["proptest", "bolero"]
 tracy = ["tracing-tracy"]
 verification = ["z3", "kani", "creusot"]
+snapshots = ["insta"]
 
 [profile.release]
 codegen-units = 1

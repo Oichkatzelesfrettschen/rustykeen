@@ -1,0 +1,34 @@
+namespace keen {
+  // Solve a puzzle from sgt-puzzles "desc" format.
+  //
+  // Returns `null` if no solution exists (or if inputs are invalid).
+  Grid? solve_sgt_desc(u8 n, string desc, DeductionTier tier);
+
+  // Generate a puzzle (sgt-puzzles "desc" format) and return it with its solution.
+  //
+  // Returns `null` if generation is unavailable (missing features) or fails to find
+  // a unique puzzle within the configured attempt budget.
+  Generated? generate_sgt_desc(u8 n, u64 seed, DeductionTier tier);
+
+  // Count solutions up to `limit` (use `2` for uniqueness check).
+  u32 count_solutions_sgt_desc(u8 n, string desc, DeductionTier tier, u32 limit);
+};
+
+// Minimal UniFFI surface for the pure-Rust engine.
+//
+// We start with the upstream sgt-puzzles "desc" format for portability and
+// easy interop; higher-level structured types can be layered on later.
+
+[Enum]
+enum DeductionTier { "None", "Easy", "Normal", "Hard" };
+
+// Flattened n*n grid, row-major, values 0..=n (0 = empty).
+dictionary Grid {
+  u8 n;
+  sequence<u8> cells;
+};
+
+dictionary Generated {
+  string desc;
+  Grid solution;
+};

@@ -1,28 +1,54 @@
 # Architecture Overview
 
+Note: This file is a supporting sketch. The synthesized, reconciled plan lives in `docs/plan.md`.
+
 ## Scope
-Cleanroom KenKen solver/generator in pure Rust nightly with Android AGDK integration via GameActivity and a minimal C++/JNI shim; targets 4x4–9x9 grids, cages with +, −, ×, ÷, and equality; reproducible puzzles, deterministic cores, optional heuristics.
+Cleanroom KenKen (sgt-puzzles “Keen”-compatible ruleset) solver/generator in pure Rust nightly.
+
+Primary deliverable is a **library-first** engine that can be embedded in:
+- Android/iOS apps (via bindings/adapters)
+- desktop apps
+- servers / headless tooling
+
+Targets: grids up to 16×16 in the core model (solver/generator performance goals focus on 4×4–9×9), cages with `+ − × ÷` and equality, deterministic reproducibility, and opt-in high-performance backends.
 
 ## Workspace Layout
-- kenken-core: no_std-ready core types (Grid<N>, Cell, Domain, Cage, Op), bitsets, portable_simd helpers, constraint interfaces; const-generic sizes; feature flags `std`, `simd`.
-- kenken-solver: propagation engine (arc consistency, forward checking), search (DFS, MRV, LCV, AC-3/PC), conflict tracking, solution enumerator; pluggable heuristics.
-- kenken-gen: puzzle constructor, cage partitioner, clue assignment, uniqueness checker, difficulty estimator, minimizer.
-- kenken-io: serde models, TOML/JSON formats, parser for textual cage specs, exporter/importer; schema versioning.
-- kenken-cli: TUI/CLI (clap) to solve/generate/benchmark; seed control, output formats.
-- kenken-wasm: WASM bindings via wasm-bindgen for web demos.
-- android-app: GameActivity-based app; C++ shim (AGDK) calls Rust FFI; optional Vulkan renderer for native UI.
+The current workspace is intentionally staged:
+- `kenken-core`: model + validation + formats
+  - sgt-puzzles “desc” import/export for corpus/regression (`format::sgt_desc`)
+  - optional bitvec-backed domains (`core-bitvec`)
+- `kenken-solver`: deterministic solver + solution counting
+  - optional `bumpalo` scratch arenas (`alloc-bumpalo`)
+  - optional DLX Latin utilities (`solver-dlx`)
+  - optional Varisat SAT Latin utilities (`sat-varisat`)
+- `kenken-gen`: generation scaffolding
+  - batch solve/uniqueness APIs (optionally parallel via `rayon`)
+  - deterministic RNG plumbing (`seed` module)
+- `kenken-io`: versioned snapshots (currently `rkyv` snapshot v1 behind `io-rkyv`)
+- `kenken-uniffi`: UniFFI bindings crate (minimal solve/count surface via sgt “desc”)
+- `kenken-cli`: reference CLI tooling (`solve`/`count` over sgt “desc`)
 
 ## Data Flow
-Generator → Solver (uniqueness, difficulty) → IO serialize → CLI/Android consume → Render results.
+Generator → Solver (uniqueness, difficulty) → IO snapshot → adapters (CLI / UniFFI / …)
 
 ## Threading Model
-Core/solver worker pool; deterministic single-threaded mode; Android main thread for events, render thread for Vulkan, workers for compute.
+Default engine logic is deterministic; optional parallelism is used for **batch** workloads (generation pipelines, corpus evaluation).
 
 ## Determinism
-Seeded ChaCha20 RNG; fixed ordering; snapshot/rehydration of solver state.
+Determinism is a first-class requirement:
+- Explicit RNG algorithm (`ChaCha20Rng`) and seed mapping in `kenken-gen`
+- No reliance on hashmap iteration order in solver hotpaths
+- Solution counting uses early-exit limits (uniqueness = count up to 2)
 
 ## FFI Boundary
-C ABI exports: init, load_puzzle(json), solve_step, solve_all, generate(config), shutdown; headers via cbindgen; hidden visibility.
+Near-term FFI boundary is UniFFI:
+- Parse a puzzle from sgt “desc”
+- Solve / count solutions
+
+Future adapters can add:
+- C ABI layer (cbindgen) for non-Swift/Kotlin targets
+- platform-specific integration examples (Android/iOS)
 
 ## Targets
-Rust nightly; Android NDK r28+ (API 26+); CLI desktop; optional WASM; kenken-core supports no_std with alloc.
+- Toolchain pinned in `rust-toolchain.toml`.
+- CI is aligned to the pinned nightly in `.github/workflows/ci.yml`.

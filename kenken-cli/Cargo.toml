@@ -1,0 +1,27 @@
+[package]
+name = "kenken-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+kenken-core = { path = "../kenken-core" }
+kenken-solver = { path = "../kenken-solver" }
+thiserror.workspace = true
+mimalloc = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
+
+[features]
+default = ["std", "telemetry-subscriber"]
+std = []
+
+# Placeholders
+dev-tui = []
+telemetry-tracing = []
+bench-criterion = []
+alloc-mimalloc = ["dep:mimalloc"]
+telemetry-subscriber = ["dep:tracing-subscriber"]

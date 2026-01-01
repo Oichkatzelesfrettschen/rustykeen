@@ -12,7 +12,7 @@
 
 ## Integration
 - Feature gate `verification` enables z3/kani/creusot/bolero; keep optional in CI.
-- Place Kani harnesses under `tests/kani/` or `src/verify/`; run `cargo kani` in verification CI job.
+- Place Kani harnesses under `tests/kani/` or `tools/verify/`; run `cargo kani` in verification CI job.
 - Z3 runs only on final candidates to certify uniqueness; cache results via rkyv.
 - Bolero targets parsing, cage assignment, and solver callbacks; limit runtime with CI budget.
 
