@@ -15,6 +15,7 @@ This repo keeps optional capabilities behind Cargo features so the core remains 
 - `alloc-bumpalo` (default off): enables `bumpalo` arena allocations for propagation scratch buffers (reduces heap churn).
 - `solver-dlx` (default off): enables `dlx-rs` Latin-square exact-cover solver utilities.
 - `sat-varisat` (default off): enables `varisat` SAT encoding utilities (uniqueness hooks).
+- `simd-dispatch` (default off): enables runtime ISA dispatch for selected hot ops (implemented in `kenken-simd`).
 - `std` (default on): placeholder for eventual `no_std` story.
 
 ## `kenken-gen`

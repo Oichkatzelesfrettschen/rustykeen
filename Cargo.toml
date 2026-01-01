@@ -3,6 +3,7 @@ members = [
   "kenken-core",
   "kenken-gen",
   "kenken-io",
+  "kenken-simd",
   "kenken-solver",
   "kenken-uniffi",
   "kenken-cli",

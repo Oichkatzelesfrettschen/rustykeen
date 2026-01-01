@@ -34,6 +34,16 @@ use bumpalo::Bump;
 
 use crate::error::SolveError;
 
+#[cfg(feature = "simd-dispatch")]
+fn popcount_u32(x: u32) -> u32 {
+    kenken_simd::popcount_u32(x)
+}
+
+#[cfg(not(feature = "simd-dispatch"))]
+fn popcount_u32(x: u32) -> u32 {
+    x.count_ones()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Solution {
     pub n: u8,
@@ -377,7 +387,7 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u32)
         let row = idx / n;
         let col = idx % n;
         let dom = domain_for_cell(puzzle, state, idx, row, col)?;
-        let pop = dom.count_ones();
+        let pop = popcount_u32(dom);
         if pop == 0 {
             return Ok(None);
         }
@@ -478,7 +488,7 @@ fn propagate(
             if state.grid[idx] != 0 {
                 continue;
             }
-            if dom.count_ones() == 1 {
+            if popcount_u32(dom) == 1 {
                 let val = dom.trailing_zeros() as u8;
                 let r = idx / n;
                 let c = idx % n;

@@ -21,6 +21,7 @@ Legend:
 - `smallvec` → small cage cell-lists hotpath → always-on (core) → status `now`
 - `wide` → SIMD-friendly constraint checks → feature `simd-wide` → status `planned`
 - `soa_derive` → SoA layout for batch generation → feature `layout-soa` → status `planned`
+- `kenken-simd` → runtime SIMD/ISA dispatch glue (x86 POPCNT, aarch64 NEON helpers) → feature `simd-dispatch` → status `now` (safe API; unsafe isolated)
 - `likely_stable` → branch prediction hints → feature `perf-likely` → status `now` (solver uses `likely(...)` when enabled)
 - `static_assertions` → compile-time layout/size contracts → feature `perf-assertions` → status `now` (core asserts `CellId`/`Coord` layout)
 

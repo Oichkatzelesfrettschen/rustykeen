@@ -1,0 +1,15 @@
+[package]
+name = "kenken-simd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# This crate intentionally contains the (small) amount of `unsafe` required for
+# runtime ISA dispatch. It exposes a safe API to the rest of the workspace.
+[lints.rust]
+unsafe_code = "allow"
+warnings = "deny"
+
+[dependencies]
+

@@ -19,6 +19,10 @@ Implication (important):
   1) shipping multiple artifacts (v1 and v3), **or**
   2) compiling a v1 baseline and using **runtime dispatch** (`is_x86_feature_detected!`) for v3 hotpaths.
 
+This repo now provides a baseline mechanism for option (2):
+- `kenken-simd` implements runtime ISA dispatch behind a safe API.
+- `kenken-solver/simd-dispatch` uses it for selected hot operations (starting with popcount).
+
 ## Linux: x86_64
 Recommended:
 - Baseline artifact: `x86_64-unknown-linux-gnu` with `-C target-cpu=x86-64-v1`
@@ -74,4 +78,3 @@ Linux x86_64 tuned v3 (separate artifact):
 
 Android arm64 (requires NDK + cargo-ndk):
 - `cargo ndk -t arm64-v8a build --release -p kenken-cli --all-features`
-
