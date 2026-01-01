@@ -29,6 +29,13 @@ Notes:
 The workspace sets `warnings = "deny"` via Cargo lints, which is the Rust-side equivalent of `-Werror`.
 CI also runs `cargo clippy ... -D warnings`.
 
+## Target portability vs per-CPU tuning
+We intentionally separate:
+- **portable artifacts** (run on the full target baseline), from
+- **tuned artifacts** (may require newer CPUs / extra ISA features).
+
+See `docs/target_matrix.md` for the recommended target tiers and the pitfalls of compiling everything as “v3”.
+
 ## PGO (profile guided optimization)
 Use `scripts/pgo.sh`:
 - `./scripts/pgo.sh gen`
