@@ -1,6 +1,7 @@
 // UniFFI generates the FFI surface (including `#[no_mangle]` symbols), which
 // requires allowing unsafe code in this adapter crate.
 #![allow(unsafe_code)]
+#![deny(warnings)]
 #![doc = include_str!("../README.md")]
 
 use kenken_core::format::sgt_desc::encode_keen_desc;

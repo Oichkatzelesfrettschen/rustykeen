@@ -17,6 +17,7 @@ publish = false
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+warnings = "deny"
 
 [workspace.dependencies]
 thiserror = "2"
@@ -27,3 +28,21 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
 tracing = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+incremental = false
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+[profile.dev]
+opt-level = 1
+debug = 0
+incremental = true
