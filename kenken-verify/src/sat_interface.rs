@@ -33,7 +33,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "not yet implemented")]
     fn test_sat_stub() {
-        let puzzle = Puzzle::new(2, vec![], vec![]).unwrap();
+        let puzzle = Puzzle {
+            n: 2,
+            cages: vec![],
+        };
         let solution = vec![1, 2, 2, 1];
         let _ = verify_with_sat(&puzzle, &solution);
     }
