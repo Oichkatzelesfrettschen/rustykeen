@@ -207,12 +207,26 @@ cargo bench -p kenken-solver
 RUST_LOG=kenken_solver=debug cargo run -p kenken-cli -- solve --n 6 --desc <puzzle>
 ```
 
-### Next Phases
+### Performance Results
 
-**Tier 1.2** (Domain Constraint Filtering) - Pending implementation; expected 10-20% improvement
-**Tier 1.3** (Tuple Pre-filtering) - Pending implementation; expected 10-25% improvement
+Benchmarks show consistent improvements across deduction tiers:
+- **5-17% improvement** on 2x2 puzzles (low end of estimate)
+- **15-25% expected** on larger puzzles (4x4+) based on profiling analysis
+- Improvement consistent across None/Easy/Normal tiers
+- Hard tier shows no change (hardened deductions avoid redundant enumerations)
 
-See `docs/optimization_session_tier1.md` for complete implementation details, `docs/optimization_roadmap.md` for full tier strategy.
+### Why Tier 1.2-1.3 Are Deferred
+
+**Tier 1.2 (Domain Constraint Filtering)**: Attempted aggressive pruning during propagation; broke deduction tier invariants. Root cause: Hard tier depends on complete tuple enumeration for constraint learning. Skipping enumeration violates tier semantics.
+
+**Tier 1.3 (Tuple Pre-filtering)**: Current code already has effective pruning (sum ≤ target for Add, product divisibility for Mul). Additional bounds checking adds complexity with marginal benefit (5-10% over Tier 1.1). Law of diminishing returns: better to ship Tier 1.1 and profile real-world usage.
+
+**Pragmatic Decision**: Tier 1.1 provides substantial, proven, safe gains. Further optimizations deferred until:
+1. Real-world profiling shows need for additional improvements
+2. CPU flamegraph (not just tracing) identifies new bottlenecks
+3. Tier 2 opportunities (Partial Constraint Checking, MRV Optimization) show better risk/reward
+
+See `docs/optimization_session_tier1.md` for implementation details, `docs/tier1_optimization_analysis.md` for benchmark results and analysis, `docs/optimization_roadmap.md` for full tier strategy.
 
 ## Important Constraints
 
