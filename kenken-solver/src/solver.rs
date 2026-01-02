@@ -773,8 +773,9 @@ fn propagate(
         }
 
         for cage in &puzzle.cages {
-            // Tier 2.2: Track which cells might have domain changes
+            // Tier 2.2: Smarter dirty tracking - capture domain state before deduction
             let cage_cells: Vec<usize> = cage.cells.iter().map(|c| c.0 as usize).collect();
+            let domain_before: Vec<u64> = cage_cells.iter().map(|&idx| domains[idx]).collect();
 
             #[cfg(feature = "alloc-bumpalo")]
             apply_cage_deduction_with_bump(&bump, puzzle, rules, state, cage, tier, &mut domains)?;
@@ -782,9 +783,14 @@ fn propagate(
             #[cfg(not(feature = "alloc-bumpalo"))]
             apply_cage_deduction(puzzle, rules, state, cage, tier, &mut domains)?;
 
-            // Tier 2.2: Mark cells in this cage as potentially dirty (domains may have changed)
-            for &idx in &cage_cells {
-                state.mrv_cache.mark_dirty(idx);
+            // Tier 2.2: Only mark cells whose domains were actually reduced (smarter dirty tracking)
+            for (i, &idx) in cage_cells.iter().enumerate() {
+                let domain_after = domains[idx];
+                // Mark dirty only if domain was reduced (bits removed)
+                // Using: (before & ~after) != 0 means bits were removed
+                if (domain_before[i] & !domain_after) != 0 {
+                    state.mrv_cache.mark_dirty(idx);
+                }
             }
         }
 
