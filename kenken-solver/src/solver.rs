@@ -259,6 +259,31 @@ struct State {
     tuple_cache: HashMap<CacheTupleKey, CachedTupleResult>,
 }
 
+/// Check if all cells in a cage are fully assigned (domain size == 1).
+/// This enables Tier 1.2 optimization: skip enumeration for fully-assigned cages.
+#[inline]
+fn all_cells_fully_assigned(cells: &[usize], domains: &[u64]) -> bool {
+    for &idx in cells {
+        // Cell is fully assigned if exactly 1 bit is set (domain.popcount() == 1)
+        let popcount = domains[idx].count_ones();
+        if popcount != 1 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Compute any_mask (union of valid values) from fully-assigned cage cells.
+/// Used by Tier 1.2 to avoid enumeration when all cells have exactly one value.
+#[inline]
+fn compute_any_mask_from_assigned(cells: &[usize], domains: &[u64]) -> u64 {
+    let mut any_mask = 0u64;
+    for &idx in cells {
+        any_mask |= domains[idx];
+    }
+    any_mask
+}
+
 /// Compute a cache key for a cage's tuple enumeration.
 /// Uses a hash of the cage's cells and the domain state for those cells.
 /// CRITICAL: Includes deduction tier to prevent cache mixing across different propagation contexts.
@@ -723,77 +748,105 @@ fn apply_cage_deduction(
             let b_idx = cells[1];
             let a_dom = domains[a_idx];
             let b_dom = domains[b_idx];
-            let mut a_ok = 0u64;
-            let mut b_ok = 0u64;
-            let mut found = false;
-            let mut must_row: Vec<Option<u64>> = vec![None; n];
-            let mut must_col: Vec<Option<u64>> = vec![None; n];
-            let coords = [(a_idx / n, a_idx % n), (b_idx / n, b_idx % n)];
-            for av in domain_iter(a_dom) {
-                for bv in domain_iter(b_dom) {
-                    let ok = match cage.op {
-                        Op::Sub => (av as i32 - bv as i32).abs() == cage.target,
-                        Op::Div => {
-                            let (num, den) = if av >= bv { (av, bv) } else { (bv, av) };
-                            den != 0 && (num as i32) == (den as i32).saturating_mul(cage.target)
-                        }
-                        _ => false,
-                    };
-                    if ok {
-                        found = true;
-                        a_ok |= 1u64 << (av as u32);
-                        b_ok |= 1u64 << (bv as u32);
 
-                        if tier == DeductionTier::Hard {
-                            let pair = [av, bv];
-                            let mut row_bits = vec![0u64; n];
-                            let mut col_bits = vec![0u64; n];
-                            for (i, &(r, c)) in coords.iter().enumerate() {
-                                row_bits[r] |= 1u64 << (pair[i] as u32);
-                                col_bits[c] |= 1u64 << (pair[i] as u32);
+            // TIER 1.2: If both cells are fully assigned, verify constraint directly
+            if tier != DeductionTier::Hard
+                && domains[a_idx].count_ones() == 1
+                && domains[b_idx].count_ones() == 1 {
+                // Both cells have exactly one value; check constraint directly
+                let av = (a_dom.trailing_zeros() + 1) as u8;
+                let bv = (b_dom.trailing_zeros() + 1) as u8;
+                let ok = match cage.op {
+                    Op::Sub => (av as i32 - bv as i32).abs() == cage.target,
+                    Op::Div => {
+                        let (num, den) = if av >= bv { (av, bv) } else { (bv, av) };
+                        den != 0 && (num as i32) == (den as i32).saturating_mul(cage.target)
+                    }
+                    _ => false,
+                };
+                if ok {
+                    // Constraint satisfied; domains unchanged
+                } else {
+                    // Constraint violated; domains empty
+                    domains[a_idx] = 0u64;
+                    domains[b_idx] = 0u64;
+                }
+            } else {
+                // Standard enumeration (needed for Hard tier or when cells not fully assigned)
+                let mut a_ok = 0u64;
+                let mut b_ok = 0u64;
+                let mut found = false;
+                let coords = [(a_idx / n, a_idx % n), (b_idx / n, b_idx % n)];
+                let mut must_row: Vec<Option<u64>> = vec![None; n];
+                let mut must_col: Vec<Option<u64>> = vec![None; n];
+
+                for av in domain_iter(a_dom) {
+                    for bv in domain_iter(b_dom) {
+                        let ok = match cage.op {
+                            Op::Sub => (av as i32 - bv as i32).abs() == cage.target,
+                            Op::Div => {
+                                let (num, den) = if av >= bv { (av, bv) } else { (bv, av) };
+                                den != 0 && (num as i32) == (den as i32).saturating_mul(cage.target)
                             }
-                            for r in 0..n {
-                                if row_bits[r] != 0 {
-                                    must_row[r] = Some(match must_row[r] {
-                                        None => row_bits[r],
-                                        Some(m) => m & row_bits[r],
-                                    });
+                            _ => false,
+                        };
+                        if ok {
+                            found = true;
+                            a_ok |= 1u64 << (av as u32);
+                            b_ok |= 1u64 << (bv as u32);
+
+                            if tier == DeductionTier::Hard {
+                                let pair = [av, bv];
+                                let mut row_bits = vec![0u64; n];
+                                let mut col_bits = vec![0u64; n];
+                                for (i, &(r, c)) in coords.iter().enumerate() {
+                                    row_bits[r] |= 1u64 << (pair[i] as u32);
+                                    col_bits[c] |= 1u64 << (pair[i] as u32);
                                 }
-                            }
-                            for c in 0..n {
-                                if col_bits[c] != 0 {
-                                    must_col[c] = Some(match must_col[c] {
-                                        None => col_bits[c],
-                                        Some(m) => m & col_bits[c],
-                                    });
+                                for r in 0..n {
+                                    if row_bits[r] != 0 {
+                                        must_row[r] = Some(match must_row[r] {
+                                            None => row_bits[r],
+                                            Some(m) => m & row_bits[r],
+                                        });
+                                    }
+                                }
+                                for c in 0..n {
+                                    if col_bits[c] != 0 {
+                                        must_col[c] = Some(match must_col[c] {
+                                            None => col_bits[c],
+                                            Some(m) => m & col_bits[c],
+                                        });
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            domains[a_idx] &= a_ok;
-            domains[b_idx] &= b_ok;
 
-            if tier == DeductionTier::Hard && found {
-                let mut in_cage = vec![false; a];
-                in_cage[a_idx] = true;
-                in_cage[b_idx] = true;
-                for (r, maybe_must) in must_row.into_iter().enumerate() {
-                    let Some(must) = maybe_must else { continue };
-                    for c in 0..n {
-                        let idx = r * n + c;
-                        if !in_cage[idx] {
-                            domains[idx] &= !must;
+                domains[a_idx] &= a_ok;
+                domains[b_idx] &= b_ok;
+
+                if tier == DeductionTier::Hard && found {
+                    let mut in_cage = vec![false; a];
+                    in_cage[a_idx] = true;
+                    in_cage[b_idx] = true;
+                    for (r, maybe_must) in must_row.into_iter().enumerate() {
+                        let Some(must) = maybe_must else { continue };
+                        for c in 0..n {
+                            let idx = r * n + c;
+                            if !in_cage[idx] {
+                                domains[idx] &= !must;
+                            }
                         }
                     }
-                }
-                for (c, maybe_must) in must_col.into_iter().enumerate() {
-                    let Some(must) = maybe_must else { continue };
-                    for r in 0..n {
-                        let idx = r * n + c;
-                        if !in_cage[idx] {
-                            domains[idx] &= !must;
+                    for (c, maybe_must) in must_col.into_iter().enumerate() {
+                        let Some(must) = maybe_must else { continue };
+                        for r in 0..n {
+                            let idx = r * n + c;
+                            if !in_cage[idx] {
+                                domains[idx] &= !must;
+                            }
                         }
                     }
                 }
@@ -805,8 +858,15 @@ fn apply_cage_deduction(
             let (per_pos, any_mask, must_row, must_col, found) = if tier == DeductionTier::Hard {
                 enumerate_cage_tuples_with_must(n, cage, &cells, &coords, domains)
             } else {
-                // Only use cache for n >= 6 (cache overhead exceeds benefit for smaller puzzles)
-                if n >= 6 {
+                // TIER 1.2: Skip enumeration if all cage cells are fully assigned.
+                // Only for Easy/Normal tiers (Hard tier needs full enumeration for constraint learning).
+                if tier != DeductionTier::Hard && all_cells_fully_assigned(&cells, domains) {
+                    // All cells have exactly one value; skip enumeration and compute any_mask directly
+                    let any_mask = compute_any_mask_from_assigned(&cells, domains);
+                    let per_pos = vec![any_mask; cells.len()];
+                    (per_pos, any_mask, vec![0u64; n], vec![0u64; n], any_mask != 0)
+                } else if n >= 6 {
+                    // TIER 1.1: Cache enumeration results (only for n >= 6)
                     let cache_key = compute_cache_key(cage, &cells, domains, tier);
                     if let Some(cached) = state.tuple_cache.get(&cache_key) {
                         // Cache hit: use cached result
