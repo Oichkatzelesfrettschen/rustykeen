@@ -1,25 +1,111 @@
-# Rust build artifacts
+# =============================================================================
+# RUST BUILD ARTIFACTS & DEPENDENCIES
+# =============================================================================
 /target/
 **/*.rs.bk
+Cargo.lock
 
-# Workspace caches and local DBs
-/logs/
-mydatabase.db
+# =============================================================================
+# PROFILING & BENCHMARKING DATA (PGO, BOLT, perf, flamegraph, etc.)
+# =============================================================================
+# PGO profiling artifacts
+*.profraw
+*.profdata
+pgo-data/
+pgo-profiles/
 
-# Tooling/state
-/.claude/
-/.vscode/
-/.idea/
+# BOLT post-link optimization
+*.bolt.fdata
+bolt-data/
 
-# Upstream snapshots / analysis artifacts (not committed)
-/third_party/
+# perf and performance profiling
+perf.data
+perf.data.old
+perf.script
+perf-*.txt
+flame*.svg
+flamegraph.svg
+perf-*.out
 
-# OS/editor junk
-.DS_Store
-Thumbs.db
+# Profiling crates/binaries
+/kenken-profile/
+/kenken-bench/target/
+
+# Core dumps and system artifacts
+core.*
+core
+*.core
+vgcore.*
+
+# =============================================================================
+# IDE & EDITOR STATE
+# =============================================================================
+.vscode/
+.idea/
 *.swp
 *.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-workspace
+.vim/
+.emacs.d/
+*.iml
+.clangd/
+compile_commands.json
 
-# Dependency locks (keep Cargo.lock for binaries; omit for libraries)
-# Uncomment if this is a library crate:
-Cargo.lock
+# =============================================================================
+# DEVELOPMENT & TOOLING
+# =============================================================================
+/.claude/
+/.mcp.json
+.env
+.env.local
+.env.*.local
+
+# =============================================================================
+# WORKSPACE CACHES & TEMPORARY FILES
+# =============================================================================
+/logs/
+*.log
+*.tmp
+*.temp
+mydatabase.db
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# UPSTREAM & EXTERNAL ARTIFACTS
+# =============================================================================
+/third_party/
+/external/
+
+# =============================================================================
+# TEST ARTIFACTS & COVERAGE
+# =============================================================================
+/coverage/
+*.lcov
+tarpaulin-report.html
+cobertura.xml
+test-results/
+test-output.txt
+
+# =============================================================================
+# BINARY ARTIFACTS (keep source, not compiled binaries)
+# =============================================================================
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# =============================================================================
+# DOCUMENTATION BUILDS
+# =============================================================================
+/docs/build/
+/docs/_build/
+/docs/.doctrees/
+site/

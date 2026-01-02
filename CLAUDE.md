@@ -282,6 +282,130 @@ See `docs/tier13_reevaluation_with_tier12.md` for comprehensive analysis and dec
 
 See `docs/tier1_empirical_analysis.md` for Tier 1.1 analysis, `docs/optimization_session_tier1.md` for implementation guide, `docs/optimization_roadmap.md` for full multi-tier strategy.
 
+## Phoronix Test Suite Integration
+
+**Status**: Phase 7.4 PTS Integration Complete - Benchmarking Framework Ready
+
+The KenKen solver is integrated with the Phoronix Test Suite (PTS) for standardized performance benchmarking across systems and architectures.
+
+### PTS Profile Location
+
+```
+~/.phoronix-test-suite/test-profiles/pts/kenken-solver-1.0.0/
+├── test-definition.xml       # Profile metadata and test configuration
+├── results-definition.xml     # Output parsing template
+├── kenken-solver             # Executable test wrapper script
+└── install.sh                # Installation and build script
+```
+
+### Benchmark Capabilities
+
+- **Supported Grid Sizes**: 2×2 through 32×32 (comprehensive grid coverage)
+- **Puzzle Type**: All-singleton cyclic Latin squares (each cell is a forced 1-cell cage)
+- **Puzzle Generation**:
+  - Sizes 2-16: Uses SGT format (string-based, verified via parser)
+  - Sizes 17-32: Creates Puzzle objects directly (bypasses SGT format 16-cell limit)
+- **Difficulty Tiers**: None, Easy, Normal, Hard (deduction strength control)
+- **Configurable Parameters**: Grid size (2-32), puzzle count, difficulty tier
+- **Output Format**: `Puzzles/second: X.XXX` (PTS-compatible for graph generation)
+
+### Performance Baselines (10 puzzle runs, Normal tier)
+
+```
+Grid Size    Cells   Puzzles/sec   Performance
+─────────────────────────────────────────────
+2×2            4      115,473      Baseline
+3×3            9       70,234      61% slower
+4×4           16       44,978      61% slower than 3×3
+5×5           25       16,793      63% slower
+6×6           36       21,556      28% faster (anomaly)
+7×7           49       15,975      26% slower
+8×8           64       12,526      22% slower
+9×9           81        9,894      21% slower
+10×10        100        7,444      25% slower
+12×12        144        5,316      28% slower
+14×14        196        4,222      20% slower
+16×16        256        3,192      24% slower
+18×18        324        2,571      20% slower
+20×20        400        2,073      19% slower
+24×24        576        1,199      42% slower
+28×28        784        1,074       11% slower
+32×32      1,024          791      26% slower
+```
+
+### Running Benchmarks
+
+**Via PTS CLI:**
+```bash
+phoronix-test-suite run pts/kenken-solver-1.0.0
+phoronix-test-suite run pts/kenken-solver-1.0.0 --benchmark  # Runs all configurations
+```
+
+**Manual Execution:**
+```bash
+./target/release/kenken-cli benchmark --n 4 --count 100 --tier normal
+# Output: Puzzles/second: 42626.527
+```
+
+**Wrapper Script:**
+```bash
+~/.phoronix-test-suite/test-profiles/pts/kenken-solver-1.0.0/kenken-solver \
+    --n 4 --count 100 --tier normal
+```
+
+### Implementation Details
+
+- **CLI Command**: `benchmark` subcommand added to kenken-cli
+- **Puzzle Generation**: Cyclic Latin square pattern with all-singleton cages
+  - Block structure: `_N` where N = 2*grid_size*(grid_size-1)+1 (all cells separated)
+  - Clues: For cell (row, col), value = ((row+col) % grid_size) + 1
+  - Format: `<block_structure>,<clues>` where clues are `a<value>` for each cell
+- **Timing Mechanism**: `std::time::Instant` high-resolution measurement
+- **Architecture Support**: Automatic SIMD dispatch via feature flags (runtime detection)
+
+### All-Singleton Cyclic Latin Square Puzzle Generation
+
+The benchmark uses a deterministic puzzle pattern valid for all sizes 2-32:
+- Each cell is a separate 1-cell cage with Eq operation (Op::Eq)
+- Cell values follow cyclic pattern: cell(row, col) = ((row+col) % n) + 1
+- This creates a unique solvable Latin square for each grid size
+- All cells are forced (no deduction needed), enabling pure solver throughput measurement
+
+**For sizes 2-16 (SGT format):**
+- Block structure encodes no edges removed: `_N` where N = 2*n*(n-1)+1
+- Clues: Sequential `a<value>` for each cell in row-major order
+
+Example (4×4 SGT):
+```
+Block structure: _25  (2*4*3+1 = 25 positions)
+Clues: a1 a2 a3 a4 a2 a1 a4 a3 a3 a4 a1 a2 a4 a3 a2 a1
+Result: "_25,a1a2a3a4a2a1a4a3a3a4a1a2a4a3a2a1"
+```
+
+**For sizes 17-32 (direct Puzzle construction):**
+- Creates Puzzle struct directly with n*n 1-cell cages
+- Each cage: `Cage { cells: [CellId(i)], op: Op::Eq, target: value }`
+- Avoids SGT format 16-cell size limit while maintaining puzzle validity
+
+### Benchmarking Methodology
+
+1. Generate puzzle for requested grid size (2-32) using cyclic Latin square pattern
+   - SGT format parsing for sizes 2-16
+   - Direct Puzzle construction for sizes 17-32
+2. Validate puzzle against Ruleset::keen_baseline() rules
+3. Run solver on the puzzle N times (configurable via --count parameter)
+4. Measure total elapsed time using `std::time::Instant` high-resolution timer
+5. Calculate throughput: `puzzles_solved / elapsed_time`
+6. Output as `Puzzles/second: X.XXX` for PTS parsing and graphing
+
+**Notes:**
+- All-singleton puzzles solve deterministically (no backtracking needed)
+- Ideal for measuring solver overhead, cache behavior, and scaling characteristics
+- Performance scales inversely with grid size due to increased cell count and propagation work
+- Valid for any deduction tier (None, Easy, Normal, Hard)
+
+See `docs/pts_practical_guide.md` for complete PTS integration documentation.
+
 ## Important Constraints
 
 1. **Cleanroom**: Avoid copying upstream sgt-puzzles code/constants directly; re-derive from behavior

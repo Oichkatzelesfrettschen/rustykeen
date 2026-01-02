@@ -9,8 +9,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-kenken-core = { path = "../kenken-core" }
+kenken-core = { path = "../kenken-core", features = ["core-u64"] }
 kenken-solver = { path = "../kenken-solver" }
+kenken-profile = { path = "../kenken-profile", optional = true }
+smallvec.workspace = true
 thiserror.workspace = true
 mimalloc = { version = "0.1", optional = true }
 tracing.workspace = true
@@ -30,6 +32,11 @@ telemetry-subscriber = ["dep:tracing-subscriber"]
 
 # Profiling features
 prof-flame = ["dep:tracing-flame", "dep:tracing-subscriber"]
+prof-harness = ["dep:kenken-profile"]
+
+# Domain support - pass-through to kenken-solver
+solver-u128 = ["kenken-solver/solver-u128"]
+solver-u256 = ["kenken-solver/solver-u256"]
 
 [[bin]]
 name = "profile_spans"

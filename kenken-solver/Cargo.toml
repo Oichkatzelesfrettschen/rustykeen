@@ -22,6 +22,7 @@ fixedbitset = { workspace = true, optional = true }
 smallbitvec = { workspace = true, optional = true }
 smallvec.workspace = true
 dhat = { version = "0.3", optional = true }
+rayon = { version = "1.10", optional = true }
 
 [features]
 default = ["std", "tracing"]
@@ -31,6 +32,8 @@ perf-likely = ["dep:likely_stable"]
 alloc-bumpalo = ["dep:bumpalo"]
 solver-dlx = ["dep:dlx_rs"]
 solver-u64 = ["kenken-core/core-u64"]
+solver-u128 = ["simd-dispatch"]
+solver-u256 = ["simd-dispatch"]
 solver-bitdomain = ["kenken-core/core-bitvec"]
 sat-varisat = ["dep:varisat"]
 simd-dispatch = ["dep:kenken-simd"]
@@ -39,6 +42,11 @@ solver-fixedbitset = ["dep:fixedbitset"]
 solver-smallbitvec = ["dep:smallbitvec"]
 dhat-heap = ["dep:dhat"]
 lcv-heuristic = []
+symmetry-breaking = []
+nogood-learning = []
+parallel-search = ["dep:rayon"]
+opt-serial = ["symmetry-breaking", "nogood-learning"]
+opt-all = ["symmetry-breaking", "nogood-learning", "parallel-search"]
 
 [dev-dependencies]
 criterion.workspace = true

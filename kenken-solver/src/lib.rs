@@ -6,11 +6,21 @@ pub mod dlx_latin;
 pub mod domain_ops;
 #[cfg(feature = "solver-fixedbitset")]
 pub mod domain_fixedbitset;
+#[cfg(feature = "solver-u128")]
+pub mod domain_simd128;
+#[cfg(feature = "solver-u256")]
+pub mod domain_simd256;
 #[cfg(feature = "solver-smallbitvec")]
 pub mod domain_smallbitvec;
 pub mod error;
+#[cfg(feature = "nogood-learning")]
+pub mod nogood;
+#[cfg(feature = "parallel-search")]
+pub mod parallel;
 #[cfg(feature = "sat-varisat")]
 pub mod sat_cages;
+#[cfg(feature = "symmetry-breaking")]
+pub mod symmetry;
 #[cfg(feature = "sat-varisat")]
 pub mod sat_common;
 #[cfg(feature = "sat-varisat")]
@@ -22,6 +32,10 @@ pub mod z3_verify;
 pub use crate::domain_ops::{Domain32, Domain64, DomainOps};
 #[cfg(feature = "solver-fixedbitset")]
 pub use crate::domain_fixedbitset::FixedBitDomain;
+#[cfg(feature = "solver-u128")]
+pub use crate::domain_simd128::Domain128;
+#[cfg(feature = "solver-u256")]
+pub use crate::domain_simd256::Domain256;
 #[cfg(feature = "solver-smallbitvec")]
 pub use crate::domain_smallbitvec::SmallBitDomain;
 pub use crate::error::SolveError;

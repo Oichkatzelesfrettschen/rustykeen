@@ -65,6 +65,12 @@ pub struct SolveStats {
     /// True if the solver tried multiple values at any cell (branched/guessed).
     /// When false, deductions alone determined all cell values.
     pub backtracked: bool,
+    /// Phase 6.3: Count of nogood cache hits (pruned branches due to CDL)
+    #[cfg(feature = "nogood-learning")]
+    pub nogoods_hit: u64,
+    /// Phase 6.3: Count of nogoods recorded during search
+    #[cfg(feature = "nogood-learning")]
+    pub nogoods_recorded: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,6 +188,8 @@ fn search_with_stats(
         cage_of_cell,
         tuple_cache: HashMap::new(),
         mrv_cache: MrvCache::new(puzzle.n),
+        #[cfg(feature = "nogood-learning")]
+        nogood_cache: Some(crate::nogood::NogoodCache::new(10000)),
     };
 
     let mut count = 0u32;
@@ -219,6 +227,8 @@ fn search_with_stats_deducing(
         cage_of_cell,
         tuple_cache: HashMap::new(),
         mrv_cache: MrvCache::new(puzzle.n),
+        #[cfg(feature = "nogood-learning")]
+        nogood_cache: Some(crate::nogood::NogoodCache::new(10000)),
     };
 
     let mut forced = Vec::new();
@@ -266,6 +276,11 @@ struct State {
     /// Tracks minimum-remaining-value cell and invalidates selectively.
     #[allow(dead_code)]
     mrv_cache: MrvCache,
+    /// Phase 6.3: Nogood cache for Conflict-Driven Learning.
+    /// Records failed partial assignments to prune equivalent search branches.
+    #[cfg(feature = "nogood-learning")]
+    #[allow(dead_code)]
+    nogood_cache: Option<crate::nogood::NogoodCache>,
 }
 
 /// Check if all cells in a cage are fully assigned (domain size == 1).
@@ -399,6 +414,29 @@ fn backtrack(
     stats.nodes_visited += 1;
     stats.max_depth = stats.max_depth.max(depth);
 
+    // Phase 6.3: Check nogood cache before exploring this search state
+    #[cfg(feature = "nogood-learning")]
+    {
+        if let Some(ref mut cache) = state.nogood_cache {
+            // Extract current partial assignment (all assigned cells)
+            let mut partial_cells = Vec::new();
+            let mut partial_values = Vec::new();
+            for idx in 0..(state.n as usize * state.n as usize) {
+                if state.grid[idx] != 0 {
+                    let r = idx / (state.n as usize);
+                    let c = idx % (state.n as usize);
+                    partial_cells.push((r, c));
+                    partial_values.push(state.grid[idx]);
+                }
+            }
+
+            if cache.check(&partial_cells, &partial_values) {
+                stats.nogoods_hit += 1;
+                return Ok(());  // Prune this branch: matches a known nogood
+            }
+        }
+    }
+
     let Some((cell_idx, domain)) = choose_mrv_cell(puzzle, state)? else {
         // Solved
         *count += 1;
@@ -416,6 +454,8 @@ fn backtrack(
 
     let mut mask = domain;
     let mut tried = 0u32;
+    #[cfg(feature = "nogood-learning")]
+    let count_before = *count;
     while mask != 0 {
         let d = mask.trailing_zeros() as u8;
         mask &= mask - 1;
@@ -438,6 +478,30 @@ fn backtrack(
 
         if *count >= limit {
             return Ok(());
+        }
+    }
+
+    // Phase 6.3: Record nogood if this cell exploration found no solutions
+    #[cfg(feature = "nogood-learning")]
+    {
+        if *count == count_before && depth > 0 {
+            // No solutions found from this state - this is a conflict
+            if let Some(ref mut cache) = state.nogood_cache {
+                // Extract conflict: all currently assigned cells
+                let mut conflict_cells = Vec::new();
+                let mut conflict_values = Vec::new();
+                for idx in 0..(state.n as usize * state.n as usize) {
+                    if state.grid[idx] != 0 {
+                        let r = idx / (state.n as usize);
+                        let c = idx % (state.n as usize);
+                        conflict_cells.push((r, c));
+                        conflict_values.push(state.grid[idx]);
+                    }
+                }
+
+                cache.record(conflict_cells, conflict_values, depth as usize);
+                stats.nogoods_recorded += 1;
+            }
         }
     }
 
@@ -539,7 +603,7 @@ fn backtrack_deducing(
     // Tier 2.3: LCV (Least Constraining Value) heuristic
     // If enabled, score values and try least constraining first
     #[cfg(feature = "lcv-heuristic")]
-    let values_to_try = {
+    let mut values_to_try = {
         let mut values = Vec::new();
         let mut mask = domain;
         while mask != 0 {
@@ -556,7 +620,8 @@ fn backtrack_deducing(
     };
 
     #[cfg(not(feature = "lcv-heuristic"))]
-    let values_to_try = {
+    #[allow(unused_mut)]
+    let mut values_to_try = {
         let mut values = Vec::new();
         let mut mask = domain;
         while mask != 0 {
@@ -568,6 +633,26 @@ fn backtrack_deducing(
         }
         values
     };
+
+    #[cfg(feature = "symmetry-breaking")]
+    {
+        // Only apply symmetry breaking if we're assigning to row 0 (first row).
+        // Safety: Symmetry breaking is ONLY SAFE for puzzles where row/column permutations
+        // preserve the puzzle structure. This is true for Latin square puzzles with no
+        // spatial constraints, but NOT for most KenKen puzzles where cages break symmetries.
+        //
+        // Current limitation: This optimization is disabled for safety until we can
+        // reliably detect puzzle symmetry. To re-enable for specific puzzle types,
+        // add a runtime check to verify cage structure is symmetric.
+        if false && row == 0 && col > 0 {
+            // Placeholder for future: add safety checks here
+            values_to_try = crate::symmetry::filter_symmetric_values(
+                &state.grid,
+                col,
+                values_to_try,
+            );
+        }
+    }
 
     let mut tried = 0u32;
     for (d, _score) in values_to_try {
@@ -1625,8 +1710,38 @@ fn enumerate_cage_tuples(
     per_pos: &mut [u64],
     any_mask: &mut u64,
 ) {
+    // Phase 6.1 optimization: Use running sum/product instead of recomputing from scratch
+    enumerate_cage_tuples_impl(
+        cage,
+        cells,
+        coords,
+        domains,
+        pos,
+        chosen,
+        per_pos,
+        any_mask,
+        0i32,    // running_sum (initialized to 0)
+        1i32,    // running_prod (initialized to 1)
+    );
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+#[inline]
+fn enumerate_cage_tuples_impl(
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u64],
+    pos: usize,
+    chosen: &mut Vec<u8>,
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
+    running_sum: i32,      // Phase 6.1: accumulated sum
+    running_prod: i32,     // Phase 6.1: accumulated product
+) {
     if pos == cells.len() {
-        if cage_tuple_satisfies(cage, chosen) {
+        // Phase 6.1: Use running values instead of recomputing
+        if cage_tuple_satisfies_with_values(cage, chosen, running_sum, running_prod) {
             for (i, &v) in chosen.iter().enumerate() {
                 per_pos[i] |= 1u64 << (v as u32);
                 *any_mask |= 1u64 << (v as u32);
@@ -1643,9 +1758,10 @@ fn enumerate_cage_tuples(
         chosen.push(v);
 
         if cage.op == Op::Add {
-            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
-            if sum <= cage.target {
-                enumerate_cage_tuples(
+            // Phase 6.1: Use running_sum + v instead of recomputing entire sum
+            let new_sum = running_sum + (v as i32);
+            if new_sum <= cage.target {
+                enumerate_cage_tuples_impl(
                     cage,
                     cells,
                     coords,
@@ -1654,15 +1770,15 @@ fn enumerate_cage_tuples(
                     chosen,
                     per_pos,
                     any_mask,
+                    new_sum,       // Pass incremental sum
+                    1,             // product not used for Add
                 );
             }
         } else if cage.op == Op::Mul {
-            let mut prod: i32 = 1;
-            for &x in chosen.iter() {
-                prod = prod.saturating_mul(x as i32);
-            }
-            if prod != 0 && cage.target % prod == 0 {
-                enumerate_cage_tuples(
+            // Phase 6.1: Use running_prod * v instead of recomputing entire product
+            let new_prod = running_prod.saturating_mul(v as i32);
+            if new_prod != 0 && cage.target % new_prod == 0 {
+                enumerate_cage_tuples_impl(
                     cage,
                     cells,
                     coords,
@@ -1671,10 +1787,12 @@ fn enumerate_cage_tuples(
                     chosen,
                     per_pos,
                     any_mask,
+                    0,             // sum not used for Mul
+                    new_prod,      // Pass incremental product
                 );
             }
         } else {
-            enumerate_cage_tuples(
+            enumerate_cage_tuples_impl(
                 cage,
                 cells,
                 coords,
@@ -1683,10 +1801,36 @@ fn enumerate_cage_tuples(
                 chosen,
                 per_pos,
                 any_mask,
+                running_sum,   // Pass through for other operations
+                running_prod,
             );
         }
 
         chosen.pop();
+    }
+}
+
+/// Phase 6.1: Helper function that validates cage tuple using pre-computed running values
+#[cfg(not(feature = "alloc-bumpalo"))]
+#[inline]
+fn cage_tuple_satisfies_with_values(cage: &Cage, chosen: &[u8], sum: i32, prod: i32) -> bool {
+    match cage.op {
+        Op::Add => sum == cage.target,
+        Op::Sub => {
+            // For subtraction, we need to check all permutations
+            // Use the original function which does this correctly
+            cage_tuple_satisfies(cage, chosen)
+        }
+        Op::Mul => prod == cage.target,
+        Op::Div => {
+            // For division, we need to check all permutations
+            cage_tuple_satisfies(cage, chosen)
+        }
+        Op::Eq => {
+            // For Eq, all values must be the same
+            let first = chosen[0];
+            chosen.iter().all(|&v| v == first)
+        }
     }
 }
 
@@ -1741,8 +1885,47 @@ fn enumerate_cage_tuples_collect(
     must_col: &mut [Option<u64>],
     found: &mut bool,
 ) {
+    // Phase 6.1 optimization: Use running sum/product instead of recomputing from scratch
+    enumerate_cage_tuples_collect_impl(
+        n,
+        cage,
+        cells,
+        coords,
+        domains,
+        pos,
+        chosen,
+        per_pos,
+        any_mask,
+        must_row,
+        must_col,
+        found,
+        0i32,    // running_sum (initialized to 0)
+        1i32,    // running_prod (initialized to 1)
+    );
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+#[inline]
+#[allow(clippy::too_many_arguments)]
+fn enumerate_cage_tuples_collect_impl(
+    n: usize,
+    cage: &Cage,
+    cells: &[usize],
+    coords: &[(usize, usize)],
+    domains: &[u64],
+    pos: usize,
+    chosen: &mut Vec<u8>,
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
+    must_row: &mut [Option<u64>],
+    must_col: &mut [Option<u64>],
+    found: &mut bool,
+    running_sum: i32,      // Phase 6.1: accumulated sum
+    running_prod: i32,     // Phase 6.1: accumulated product
+) {
     if pos == cells.len() {
-        if cage_tuple_satisfies(cage, chosen) {
+        // Phase 6.1: Use running values instead of recomputing
+        if cage_tuple_satisfies_with_values(cage, chosen, running_sum, running_prod) {
             *found = true;
             for (i, &v) in chosen.iter().enumerate() {
                 per_pos[i] |= 1u64 << (v as u32);
@@ -1783,9 +1966,10 @@ fn enumerate_cage_tuples_collect(
         chosen.push(v);
 
         if cage.op == Op::Add {
-            let sum: i32 = chosen.iter().map(|&x| x as i32).sum();
-            if sum <= cage.target {
-                enumerate_cage_tuples_collect(
+            // Phase 6.1: Use running_sum + v instead of recomputing entire sum
+            let new_sum = running_sum + (v as i32);
+            if new_sum <= cage.target {
+                enumerate_cage_tuples_collect_impl(
                     n,
                     cage,
                     cells,
@@ -1798,15 +1982,15 @@ fn enumerate_cage_tuples_collect(
                     must_row,
                     must_col,
                     found,
+                    new_sum,       // Pass incremental sum
+                    1,             // product not used for Add
                 );
             }
         } else if cage.op == Op::Mul {
-            let mut prod: i32 = 1;
-            for &x in chosen.iter() {
-                prod = prod.saturating_mul(x as i32);
-            }
-            if prod != 0 && cage.target % prod == 0 {
-                enumerate_cage_tuples_collect(
+            // Phase 6.1: Use running_prod * v instead of recomputing entire product
+            let new_prod = running_prod.saturating_mul(v as i32);
+            if new_prod != 0 && cage.target % new_prod == 0 {
+                enumerate_cage_tuples_collect_impl(
                     n,
                     cage,
                     cells,
@@ -1819,10 +2003,12 @@ fn enumerate_cage_tuples_collect(
                     must_row,
                     must_col,
                     found,
+                    0,             // sum not used for Mul
+                    new_prod,      // Pass incremental product
                 );
             }
         } else {
-            enumerate_cage_tuples_collect(
+            enumerate_cage_tuples_collect_impl(
                 n,
                 cage,
                 cells,
@@ -1835,6 +2021,8 @@ fn enumerate_cage_tuples_collect(
                 must_row,
                 must_col,
                 found,
+                running_sum,   // Pass through for other operations
+                running_prod,
             );
         }
 
@@ -2182,13 +2370,17 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         place(&mut state, row, col, d);
-        let bit_after = state.row_mask[row] & (1u32 << d);
+        let bit_after = state.row_mask[row] & (1u64 << d);
 
         kani::assert(bit_after != 0, "place should set digit bit in row_mask");
     }
@@ -2209,13 +2401,17 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         place(&mut state, row, col, d);
-        let bit_after = state.col_mask[col] & (1u32 << d);
+        let bit_after = state.col_mask[col] & (1u64 << d);
 
         kani::assert(bit_after != 0, "place should set digit bit in col_mask");
     }
@@ -2236,16 +2432,20 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         // Place then unplace
         place(&mut state, row, col, d);
         unplace(&mut state, row, col, d);
 
-        let bit_after = state.row_mask[row] & (1u32 << d);
+        let bit_after = state.row_mask[row] & (1u64 << d);
         kani::assert(bit_after == 0, "unplace should clear digit bit in row_mask");
     }
 
@@ -2265,16 +2465,20 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         // Place then unplace
         place(&mut state, row, col, d);
         unplace(&mut state, row, col, d);
 
-        let bit_after = state.col_mask[col] & (1u32 << d);
+        let bit_after = state.col_mask[col] & (1u64 << d);
         kani::assert(bit_after == 0, "unplace should clear digit bit in col_mask");
     }
 
@@ -2294,9 +2498,13 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         let row_before = state.row_mask[row];
@@ -2342,9 +2550,13 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         // Place digit d at (row, col1)
@@ -2356,7 +2568,7 @@ mod kani_verification {
 
         // Domain should NOT include digit d
         kani::assert(
-            (domain & (1u32 << d)) == 0,
+            (domain & (1u64 << d)) == 0,
             "domain should exclude digit placed in same row",
         );
     }
@@ -2383,9 +2595,13 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         // Place digit d at (row1, col)
@@ -2397,7 +2613,7 @@ mod kani_verification {
 
         // Domain should NOT include digit d
         kani::assert(
-            (domain & (1u32 << d)) == 0,
+            (domain & (1u64 << d)) == 0,
             "domain should exclude digit placed in same column",
         );
     }
@@ -2418,9 +2634,13 @@ mod kani_verification {
         let mut state = State {
             n,
             grid: vec![0; a],
-            row_mask: vec![0u32; n as usize],
-            col_mask: vec![0u32; n as usize],
+            row_mask: vec![0u64; n as usize],
+            col_mask: vec![0u64; n as usize],
             cage_of_cell: vec![0; a],
+            tuple_cache: HashMap::new(),
+            mrv_cache: MrvCache::new(n),
+            #[cfg(feature = "nogood-learning")]
+            nogood_cache: None,
         };
 
         place(&mut state, row, col, d);

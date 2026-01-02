@@ -7,7 +7,7 @@ members = [
   "kenken-solver",
   "kenken-verify",
   "kenken-uniffi",
-  "kenken-cli",
+  "kenken-cli", "kenken-profile",
 ]
 exclude = ["fuzz"]
 resolver = "3"
