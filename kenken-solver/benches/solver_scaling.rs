@@ -86,6 +86,24 @@ fn benchmark_solve_6x6(c: &mut Criterion) {
     });
 }
 
+fn benchmark_solve_8x8(c: &mut Criterion) {
+    let puzzle = std::hint::black_box(create_trivial_puzzle(8));
+    let rules = std::hint::black_box(Ruleset::keen_baseline());
+
+    c.bench_function("solve_8x8_uniqueness", |b| {
+        b.iter(|| count_solutions_up_to(&puzzle, rules, 2u32))
+    });
+}
+
+fn benchmark_solve_12x12(c: &mut Criterion) {
+    let puzzle = std::hint::black_box(create_trivial_puzzle(12));
+    let rules = std::hint::black_box(Ruleset::keen_baseline());
+
+    c.bench_function("solve_12x12_uniqueness", |b| {
+        b.iter(|| count_solutions_up_to(&puzzle, rules, 2u32))
+    });
+}
+
 criterion_group! {
     name = benches;
     config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
@@ -94,7 +112,9 @@ criterion_group! {
         benchmark_solve_3x3,
         benchmark_solve_4x4,
         benchmark_solve_5x5,
-        benchmark_solve_6x6
+        benchmark_solve_6x6,
+        benchmark_solve_8x8,
+        benchmark_solve_12x12
 }
 
 criterion_main!(benches);

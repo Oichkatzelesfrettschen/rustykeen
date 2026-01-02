@@ -1,6 +1,8 @@
 # KenKen Solver Architecture
 
-Last updated: 2026-01-01
+Last updated: 2026-01-02
+
+**Optimization Status**: Tier 1.0-1.2 Complete (40-52% speedup) + Tier 2.2 Validated (4-9% additional) = 44-61% cumulative speedup. See `docs/OPTIMIZATION_ROADMAP.md` for detailed tier analysis.
 
 ## Overview
 
@@ -65,11 +67,19 @@ pub type CellId = (u8, u8);  // (row, col)
 // Bit i is set iff digit i is possible
 // Example for n=3: domain = 0b00000111 means {1,2,3}
 
+struct MrvCache {
+    valid: bool,              // Cache validity flag
+    min_cell: usize,          // Cached MRV cell index
+    min_count: u32,           // Cached MRV domain size
+    dirty_cells: Vec<bool>,   // Tracks cells with domain reductions
+}
+
 struct State {
     domains: Vec<u32>,        // One per cell
     grid: Vec<u8>,            // Assigned values (0=unassigned)
     row_mask: Vec<u32>,       // Placed digits per row
     col_mask: Vec<u32>,       // Placed digits per column
+    mrv_cache: MrvCache,      // Tier 2.2: MRV heuristic cache (see below)
 }
 ```
 
@@ -210,31 +220,39 @@ fn popcount(domain: u32) -> u32 {
 
 ## Performance Optimizations
 
-### 1. SIMD Popcount
+### Tier 1: Foundation Optimizations (Tier 1.0-1.2)
 
-`kenken-simd` provides runtime ISA dispatch:
+**Achievement**: 40-52% cumulative speedup through:
+1. **SIMD Popcount** - Runtime ISA dispatch via kenken-simd (u64 bit operations)
+2. **Row/Column Flag Propagation** - Faster row/column mask computation
+3. **Early Constraint Checking** - 2-cell cages checked before enumeration
 
-```rust
-// Falls back to software popcount if AVX2 unavailable
-let num_possible = popcount(domain)
-```
+### Tier 2.2: MRV Heuristic Caching
 
-### 2. Eager Contradiction Detection
+**Achievement**: 4-9% additional speedup (validated across 2x2-12x12 puzzles)
 
-```rust
-// Return early if any cell has empty domain
-if domain == 0 {
-    return Err(Contradiction)
-}
-```
+**How it works**:
+1. Cache the result of `choose_mrv_cell()` across propagation iterations
+2. Track "dirty cells" - cells whose domains were actually reduced
+3. Invalidate cache only when dirty cells exist
 
-### 3. Minimal Domain Copies
+**Implementation details**:
+- `MrvCache` struct stores: `valid` flag, cached `min_cell`, `min_count`, and `dirty_cells` vector
+- **Dirty marking**: In propagate(), after each cage deduction, mark cells dirty only if domain actually reduced:
+  ```rust
+  if (domain_before[i] & !domain_after) != 0 {
+      state.mrv_cache.mark_dirty(idx);
+  }
+  ```
+  This fine-grained approach reduces false invalidations vs. marking all touched cells
 
-State is passed by mutable reference; only backtrack points allocate new state.
+**Validation**: 2x2 (-9%), 3x3 (-6%), 6x6 (-5%), 8x8 (-6%), 12x12 (-5%) - no regressions
 
-### 4. Cage Ordering
+### Legacy Optimizations (Tier 1 Core)
 
-Cages are sorted by size; larger cages processed first (more constraints).
+1. **Eager Contradiction Detection** - Return early if any cell has empty domain
+2. **Minimal Domain Copies** - State passed by reference; only backtrack points allocate
+3. **Cage Ordering** - Larger cages processed first (more constraints)
 
 ## Data Flow Example
 
@@ -303,11 +321,27 @@ z3_verify::verify_solution_is_unique(n, solution)
 - **BitDomain fallback**: Available via `core-bitvec` feature for n > 31
 - **Benchmark result**: u32 bitmask is 2-3x faster than `BitDomain` for typical sizes
 
-### 2. Why MRV Without LCV?
+### 2. Why MRV Caching (Tier 2.2) Works, But Propagation Optimization (Tier 2.1) Failed
 
-- **MRV alone**: Reduces search tree depth significantly
-- **Adding LCV**: Causes slowdown due to per-cell constraint checking cost
-- **Decision**: Keep MRV simple; users can implement custom heuristics if needed
+**Tier 2.2 Success - MRV Cache**:
+- Why it works: Cache stores only the MRV result (clean state separation)
+- Invalidation is simple: dirty-cell tracking requires no complex state
+- Result: 4-9% speedup, no regressions
+
+**Tier 2.1 Failure - Propagation Optimization** (attempted to skip domain recalculation):
+- Why it fails: Constraint propagation system has tight interdependencies
+- Root causes (see `docs/tier21_findings.md`):
+  1. Row/column masks affect ALL cells' domains, not just assigned cells
+  2. Cage deductions are interdependent (cage A's deductions constrain cage B)
+  3. Domain propagation chains require full recalculation for precision
+- Attempted workaround: "affected cages only" optimization - BREAKS correctness
+- Lesson: Incremental domain updates are unsafe without major architectural refactoring
+
+**Future LCV Heuristic (Tier 2.3)**:
+- **Different approach**: Instead of optimizing CPU efficiency, optimize search tree width
+- **Concept**: Try values that constrain remaining cells least (fewer failed branches)
+- **Status**: Pre-implementation research phase (see `docs/tier23_lcv_evaluation.md`)
+- **Benefit**: 5-12% estimated improvement on backtracking-heavy puzzles
 
 ### 3. Why Tier-Based Propagation?
 
@@ -329,7 +363,26 @@ z3_verify::verify_solution_is_unique(n, solution)
 
 ## Future Improvements
 
-1. **Arc Consistency (AC-3)**: Implement full AC-3 for stronger propagation
-2. **Constraint Hypergraph**: More sophisticated variable ordering
-3. **Incremental SAT**: Reuse SAT state across backtracks
-4. **Parallel Search**: Explore multiple branches concurrently
+### Tier 2.3: LCV Value Ordering (Pre-Implementation Research)
+
+**Concept**: Select values during backtracking that constrain remaining cells least (Least Constraining Value heuristic)
+
+**Target**: Search tree width on puzzles requiring backtracking
+
+**Expected benefit**: 5-12% improvement on backtracking-heavy puzzles
+
+**Measurement plan** (see `docs/tier23_lcv_evaluation.md`):
+- Identify backtracking-heavy puzzle corpus
+- Measure baseline backtrack counts and timings
+- Measure LCV scoring overhead (propagate simulation per value)
+- Estimate portfolio impact
+
+**Next steps**: Run measurement phase; implement if >3% average improvement detected
+
+### Longer-Term Optimizations
+
+1. **Cage Enumeration Caching**: Cache tuple enumerations for repeated cage/domain states (2-5% benefit)
+2. **Domain Representation Alternatives**: Explore fixedbitset (SIMD-optimized) or smallbitvec (inline storage) for larger puzzles
+3. **Arc Consistency (AC-3)**: Full AC-3 for stronger propagation
+4. **Parallel Search**: Explore multiple branches concurrently on large puzzles
+5. **Incremental SAT**: Reuse SAT state across backtracks

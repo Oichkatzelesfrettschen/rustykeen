@@ -271,6 +271,7 @@ struct State {
 /// Check if all cells in a cage are fully assigned (domain size == 1).
 /// This enables Tier 1.2 optimization: skip enumeration for fully-assigned cages.
 #[inline]
+#[allow(dead_code)]
 fn all_cells_fully_assigned(cells: &[usize], domains: &[u64]) -> bool {
     for &idx in cells {
         // Cell is fully assigned if exactly 1 bit is set (domain.popcount() == 1)
@@ -332,6 +333,7 @@ impl MrvCache {
 /// Compute any_mask (union of valid values) from fully-assigned cage cells.
 /// Used by Tier 1.2 to avoid enumeration when all cells have exactly one value.
 #[inline]
+#[allow(dead_code)]
 fn compute_any_mask_from_assigned(cells: &[usize], domains: &[u64]) -> u64 {
     let mut any_mask = 0u64;
     for &idx in cells {
@@ -442,6 +444,64 @@ fn backtrack(
     Ok(())
 }
 
+/// Tier 2.3: Measure how many cells would be affected if a value is placed.
+/// Lower score = less constraining = better choice (try first).
+/// Used for LCV (Least Constraining Value) heuristic when lcv-heuristic feature is enabled.
+#[cfg(feature = "lcv-heuristic")]
+#[inline]
+fn measure_value_constrainingness(
+    puzzle: &Puzzle,
+    _rules: Ruleset,
+    state: &State,
+    cell_idx: usize,
+    value: u8,
+) -> u32 {
+    // Count cells that would have their domains reduced if this value is placed
+    // Lower count = less constraining = better choice
+
+    let row = cell_idx / (state.n as usize);
+    let col = cell_idx % (state.n as usize);
+
+    // Quick estimate: cells in same row/column (Latin constraint)
+    let mut affected_count = 0u32;
+
+    // Same row: cells in same row can't have this value
+    for c in 0..state.n as usize {
+        let idx = row * state.n as usize + c;
+        if idx != cell_idx && (state.grid[idx] == 0) {
+            affected_count += 1;
+        }
+    }
+
+    // Same column: cells in same column can't have this value
+    for r in 0..state.n as usize {
+        let idx = r * state.n as usize + col;
+        if idx != cell_idx && (state.grid[idx] == 0) && (idx / (state.n as usize) != row) {
+            // Already counted in same-row check, only count if different row
+            affected_count += 1;
+        }
+    }
+
+    // Cells in same cage also constrained
+    let cage_idx = state.cage_of_cell[cell_idx];
+    let cage = &puzzle.cages[cage_idx];
+    for &cell in cage.cells.iter() {
+        let idx = cell.0 as usize;
+        if idx != cell_idx && (state.grid[idx] == 0) {
+            // Check if not already counted in row/column check
+            let same_row = idx / (state.n as usize) == row;
+            let same_col = idx % (state.n as usize) == col;
+            if !same_row && !same_col {
+                affected_count += 1;
+            }
+        }
+    }
+
+    // Return score: lower is better (fewer affected cells = less constraining)
+    // Add 1 to avoid divide by zero, add value to make deterministic ties
+    affected_count * 10 + value as u32
+}
+
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(puzzle, rules, first, state, count, stats), fields(depth, tier = ?tier), level = "debug")]
 fn backtrack_deducing(
@@ -476,15 +536,41 @@ fn backtrack_deducing(
     let row = cell_idx / (state.n as usize);
     let col = cell_idx % (state.n as usize);
 
-    let mut mask = domain;
-    let mut tried = 0u32;
-    while mask != 0 {
-        let d = mask.trailing_zeros() as u8;
-        mask &= mask - 1;
-        if d == 0 {
-            continue;
+    // Tier 2.3: LCV (Least Constraining Value) heuristic
+    // If enabled, score values and try least constraining first
+    #[cfg(feature = "lcv-heuristic")]
+    let values_to_try = {
+        let mut values = Vec::new();
+        let mut mask = domain;
+        while mask != 0 {
+            let d = mask.trailing_zeros() as u8;
+            mask &= mask - 1;
+            if d > 0 {
+                let score = measure_value_constrainingness(puzzle, rules, state, cell_idx, d);
+                values.push((d, score));
+            }
         }
+        // Sort by score ascending (lower score = less constraining = try first)
+        values.sort_by_key(|(_d, score)| *score);
+        values
+    };
 
+    #[cfg(not(feature = "lcv-heuristic"))]
+    let values_to_try = {
+        let mut values = Vec::new();
+        let mut mask = domain;
+        while mask != 0 {
+            let d = mask.trailing_zeros() as u8;
+            mask &= mask - 1;
+            if d > 0 {
+                values.push((d, 0u32)); // Dummy score, not used
+            }
+        }
+        values
+    };
+
+    let mut tried = 0u32;
+    for (d, _score) in values_to_try {
         tried += 1;
         if tried > 1 {
             stats.backtracked = true;

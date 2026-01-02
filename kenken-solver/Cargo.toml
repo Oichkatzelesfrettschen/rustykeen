@@ -38,6 +38,7 @@ verify = ["dep:z3"]
 solver-fixedbitset = ["dep:fixedbitset"]
 solver-smallbitvec = ["dep:smallbitvec"]
 dhat-heap = ["dep:dhat"]
+lcv-heuristic = []
 
 [dev-dependencies]
 criterion.workspace = true
@@ -60,4 +61,12 @@ harness = false
 
 [[bench]]
 name = "domain_repr"
+harness = false
+
+[[bench]]
+name = "lcv_measurement"
+harness = false
+
+[[bench]]
+name = "profile_flames"
 harness = false
