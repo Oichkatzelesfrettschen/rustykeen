@@ -171,6 +171,24 @@ Primary docs in `docs/`:
 - `docs/cleanroom_plan.md` - Cleanroom porting approach
 - `docs/target_matrix.md` - Build targets and CPU tuning
 - `docs/riced_build.md` - Release profile and optimization
+- `docs/dependency_audit.md` - External dependency analysis and migration roadmap
+
+## Dependency Management
+
+The workspace uses feature-gating to minimize mandatory dependencies:
+
+**Core dependencies** (always included): `rand_chacha`, `smallvec`, `thiserror`, `tracing`
+
+**Optional C/FFI dependencies** (require system libraries):
+- `z3` - SMT solver (feature: `verify`) - requires libz3
+- `mimalloc` - Allocator (feature: `alloc-mimalloc`) - requires C compiler
+
+**Internalization candidates** (to reduce external deps):
+- `dlx-rs` - Simple algorithm (~200 LOC); consider internalizing
+- `likely_stable` - Trivial macros; consider internalizing
+- `smallbitvec`/`fixedbitset` - Consolidate with Domain types
+
+See `docs/dependency_audit.md` for full analysis and migration roadmap.
 
 ## Optimization Work: Tier 1.1 Cage Tuple Caching
 
