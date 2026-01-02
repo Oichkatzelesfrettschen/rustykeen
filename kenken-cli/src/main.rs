@@ -31,13 +31,12 @@ fn usage() -> &'static str {
 USAGE:\n\
   kenken-cli solve --n <N> --desc <DESC> [--tier <none|easy|normal|hard>]\n\
   kenken-cli count --n <N> --desc <DESC> [--tier <none|easy|normal|hard>] [--limit <L>]\n\
-  kenken-cli benchmark --n <N> --count <C> [--tier <none|easy|normal|hard>] [--profile]\n\
+  kenken-cli benchmark --n <N> --count <C> [--tier <none|easy|normal|hard>]\n\
 \n\
 EXAMPLES:\n\
   kenken-cli solve --n 2 --desc b__,a3a3 --tier normal\n\
   kenken-cli count --n 2 --desc b__,a3a3 --limit 2\n\
-  kenken-cli benchmark --n 4 --count 10 --tier normal\n\
-  kenken-cli benchmark --n 32 --count 20 --tier normal --profile\n"
+  kenken-cli benchmark --n 4 --count 10 --tier normal\n"
 }
 
 fn parse_tier(s: &str) -> Option<DeductionTier> {
@@ -77,7 +76,6 @@ fn run() -> Result<(), String> {
     let mut tier: DeductionTier = DeductionTier::Normal;
     let mut limit: u32 = 2;
     let mut count: u32 = 1;
-    let mut profile: bool = false;
 
     let mut i = 2usize;
     while i < args.len() {
@@ -104,9 +102,6 @@ fn run() -> Result<(), String> {
                 count = v
                     .parse::<u32>()
                     .map_err(|_| "invalid --count".to_string())?;
-            }
-            "--profile" => {
-                profile = true;
             }
             "--help" | "-h" => {
                 println!("{}", usage());
@@ -163,7 +158,7 @@ fn run() -> Result<(), String> {
             println!("{cnt}");
         }
         "benchmark" => {
-            benchmark_puzzles(n, count, tier, rules, profile)?;
+            benchmark_puzzles(n, count, tier, rules)?;
         }
         _ => {
             return Err(format!("unknown command: {cmd}"));
@@ -178,7 +173,6 @@ fn benchmark_puzzles(
     count: u32,
     tier: DeductionTier,
     rules: Ruleset,
-    profile: bool,
 ) -> Result<(), String> {
     // Generate benchmark puzzle using cyclic Latin square pattern
     // For sizes 2-16: Uses SGT format
@@ -186,66 +180,30 @@ fn benchmark_puzzles(
     let puzzle = get_benchmark_puzzle(n)?;
 
     // Validate the puzzle before benchmarking
-    puzzle.validate(rules)
+    puzzle
+        .validate(rules)
         .map_err(|e| format!("Puzzle validation failed: {}", e))?;
 
-    if profile {
-        #[cfg(feature = "prof-harness")]
+    let start = Instant::now();
+    let mut solved = 0u32;
+
+    for _ in 0..count {
+        if solve_one_with_deductions(&puzzle, rules, tier)
+            .unwrap_or(None)
+            .is_some()
         {
-            use kenken_profile::ProfileBuilder;
-
-            let mut profiler = ProfileBuilder::new()
-                .with_system_metrics()
-                .build();
-
-            profiler.start().map_err(|e| e.to_string())?;
-
-            let mut solved = 0u32;
-            for _ in 0..count {
-                if solve_one_with_deductions(&puzzle, rules, tier)
-                    .unwrap_or(None)
-                    .is_some()
-                {
-                    solved += 1;
-                }
-            }
-
-            let report = profiler.stop().map_err(|e| e.to_string())?;
-
-            // Output profiling results
-            println!("=== Benchmark Profile Results (n={}, count={}) ===", n, count);
-            println!("{}", report.to_text());
-            println!("\n=== JSON Output ===");
-            println!("{}", report.to_json());
-            println!("\nPuzzles solved: {}/{}", solved, count);
+            solved += 1;
         }
-
-        #[cfg(not(feature = "prof-harness"))]
-        {
-            return Err("Profiling requires 'prof-harness' feature. Build with: cargo build --features prof-harness".to_string());
-        }
-    } else {
-        let start = Instant::now();
-        let mut solved = 0u32;
-
-        for _ in 0..count {
-            if solve_one_with_deductions(&puzzle, rules, tier)
-                .unwrap_or(None)
-                .is_some()
-            {
-                solved += 1;
-            }
-        }
-
-        let elapsed = start.elapsed().as_secs_f64();
-        let rate = if elapsed > 0.0 {
-            solved as f64 / elapsed
-        } else {
-            0.0
-        };
-
-        println!("Puzzles/second: {:.3}", rate);
     }
+
+    let elapsed = start.elapsed().as_secs_f64();
+    let rate = if elapsed > 0.0 {
+        solved as f64 / elapsed
+    } else {
+        0.0
+    };
+
+    println!("Puzzles/second: {:.3}", rate);
 
     Ok(())
 }

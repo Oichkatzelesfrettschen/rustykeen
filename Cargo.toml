@@ -1,13 +1,13 @@
 [workspace]
 members = [
+  "kenken-cli",
   "kenken-core",
   "kenken-gen",
   "kenken-io",
   "kenken-simd",
   "kenken-solver",
-  "kenken-verify",
   "kenken-uniffi",
-  "kenken-cli", "kenken-profile",
+  "kenken-verify",
 ]
 exclude = ["fuzz"]
 resolver = "3"

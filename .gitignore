@@ -2,8 +2,9 @@
 # RUST BUILD ARTIFACTS & DEPENDENCIES
 # =============================================================================
 /target/
+debug/
 **/*.rs.bk
-Cargo.lock
+# Note: Cargo.lock is TRACKED for this workspace (binary crate + reproducible builds)
 
 # =============================================================================
 # PROFILING & BENCHMARKING DATA (PGO, BOLT, perf, flamegraph, etc.)
@@ -15,6 +16,7 @@ pgo-data/
 pgo-profiles/
 
 # BOLT post-link optimization
+*.bolt
 *.bolt.fdata
 bolt-data/
 
@@ -23,45 +25,93 @@ perf.data
 perf.data.old
 perf.script
 perf-*.txt
-flame*.svg
-flamegraph.svg
 perf-*.out
 
-# Profiling crates/binaries
+# Flamegraph artifacts
+flame*.svg
+flamegraph.svg
+/flamegraph/
+
+# Profiling output directories
 /kenken-profile/
 /kenken-bench/target/
 
-# Core dumps and system artifacts
-core.*
+# Heap profiling
+dhat-heap.json
+massif.out.*
+cachegrind.out.*
+callgrind.out.*
+
+# =============================================================================
+# CORE DUMPS & CRASH ARTIFACTS
+# =============================================================================
 core
+core.*
 *.core
 vgcore.*
 
 # =============================================================================
 # IDE & EDITOR STATE
 # =============================================================================
+# Visual Studio Code
 .vscode/
+*.code-workspace
+
+# JetBrains IDEs
 .idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim/Neovim
 *.swp
 *.swo
+*.swn
 *~
-.DS_Store
-Thumbs.db
-*.sublime-workspace
 .vim/
+
+# Emacs
 .emacs.d/
-*.iml
+*~
+\#*\#
+.#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.pdb
+
+# clangd/ccls
 .clangd/
+.ccls-cache/
 compile_commands.json
 
 # =============================================================================
 # DEVELOPMENT & TOOLING
 # =============================================================================
+# Claude Code / AI assistants
 /.claude/
 /.mcp.json
+
+# Environment files
 .env
 .env.local
 .env.*.local
+.envrc
+
+# direnv
+.direnv/
 
 # =============================================================================
 # WORKSPACE CACHES & TEMPORARY FILES
@@ -70,16 +120,13 @@ compile_commands.json
 *.log
 *.tmp
 *.temp
-mydatabase.db
+*.bak
+*.backup
+
+# Database files (temporary/test)
 *.db
 *.sqlite
 *.sqlite3
-
-# =============================================================================
-# UPSTREAM & EXTERNAL ARTIFACTS
-# =============================================================================
-/third_party/
-/external/
 
 # =============================================================================
 # TEST ARTIFACTS & COVERAGE
@@ -91,12 +138,21 @@ cobertura.xml
 test-results/
 test-output.txt
 
+# Mutation testing (cargo-mutants)
+**/mutants.out/
+**/mutants.out.*
+
+# Fuzzing
+/fuzz/artifacts/
+/fuzz/corpus/
+
 # =============================================================================
-# BINARY ARTIFACTS (keep source, not compiled binaries)
+# BINARY ARTIFACTS
 # =============================================================================
 *.o
 *.a
 *.so
+*.so.*
 *.dylib
 *.dll
 *.exe
@@ -109,3 +165,30 @@ test-output.txt
 /docs/_build/
 /docs/.doctrees/
 site/
+
+# cargo doc output (usually in target/)
+/doc/
+
+# =============================================================================
+# UPSTREAM & EXTERNAL ARTIFACTS
+# =============================================================================
+/third_party/
+/external/
+/vendor/
+
+# =============================================================================
+# PACKAGE MANAGER ARTIFACTS
+# =============================================================================
+# npm (if using wasm-pack or similar)
+node_modules/
+package-lock.json
+
+# =============================================================================
+# MISCELLANEOUS
+# =============================================================================
+# Backup files
+*.orig
+*.rej
+
+# Sample/template files that shouldn't be committed
+Cargo.*.sample.toml

@@ -11,7 +11,7 @@ workspace = true
 [dependencies]
 kenken-core = { path = "../kenken-core", features = ["core-u64"] }
 kenken-solver = { path = "../kenken-solver" }
-kenken-profile = { path = "../kenken-profile", optional = true }
+# kenken-profile removed (crate does not exist)
 smallvec.workspace = true
 thiserror.workspace = true
 mimalloc = { version = "0.1", optional = true }
@@ -32,7 +32,7 @@ telemetry-subscriber = ["dep:tracing-subscriber"]
 
 # Profiling features
 prof-flame = ["dep:tracing-flame", "dep:tracing-subscriber"]
-prof-harness = ["dep:kenken-profile"]
+# prof-harness feature disabled (kenken-profile crate does not exist)
 
 # Domain support - pass-through to kenken-solver
 solver-u128 = ["kenken-solver/solver-u128"]
