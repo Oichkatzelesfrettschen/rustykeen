@@ -235,10 +235,12 @@ use std::collections::HashMap;
 
 /// Cache key for memoizing enumerate_cage_tuples results.
 /// Key: (op_hash, target, cells_count, cells_hash, domain_state_hash)
-type CacheTupleKey = (u8, i32, usize, u64, u64);
+#[allow(dead_code)]
+type CacheTupleKey = (u8, u8, i32, usize, u64, u64);
 
 /// Cached result from enumerate_cage_tuples.
 #[derive(Clone)]
+#[allow(dead_code)]
 struct CachedTupleResult {
     per_pos: Vec<u64>,
     any_mask: u64,
@@ -252,13 +254,17 @@ struct State {
     cage_of_cell: Vec<usize>,
     /// Memoization cache for enumerate_cage_tuples results.
     /// Maps (cage_signature, domain_hash) -> (per_pos, any_mask).
+    /// Only used for n >= 4; cache skipped for tiny puzzles (n <= 3).
+    #[allow(dead_code)]
     tuple_cache: HashMap<CacheTupleKey, CachedTupleResult>,
 }
 
 /// Compute a cache key for a cage's tuple enumeration.
 /// Uses a hash of the cage's cells and the domain state for those cells.
+/// CRITICAL: Includes deduction tier to prevent cache mixing across different propagation contexts.
 #[inline]
-fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64]) -> CacheTupleKey {
+#[allow(dead_code)]
+fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64], tier: DeductionTier) -> CacheTupleKey {
     // Simple hash of cell indices
     let mut cells_hash = 0u64;
     for &cell in cells.iter() {
@@ -280,7 +286,15 @@ fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64]) -> CacheTupl
         Op::Eq => 4u8,
     };
 
-    (op_byte, cage.target, cells.len(), cells_hash, domain_hash)
+    // Encode deduction tier: None=0, Easy=1, Normal=2, Hard=3
+    let tier_byte = match tier {
+        DeductionTier::None => 0u8,
+        DeductionTier::Easy => 1u8,
+        DeductionTier::Normal => 2u8,
+        DeductionTier::Hard => 3u8,
+    };
+
+    (op_byte, tier_byte, cage.target, cells.len(), cells_hash, domain_hash)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -791,19 +805,52 @@ fn apply_cage_deduction(
             let (per_pos, any_mask, must_row, must_col, found) = if tier == DeductionTier::Hard {
                 enumerate_cage_tuples_with_must(n, cage, &cells, &coords, domains)
             } else {
-                // Try cache lookup first
-                let cache_key = compute_cache_key(cage, &cells, domains);
-                if let Some(cached) = state.tuple_cache.get(&cache_key) {
-                    // Cache hit: use cached result
-                    (
-                        cached.per_pos.clone(),
-                        cached.any_mask,
-                        vec![0u64; n],
-                        vec![0u64; n],
-                        cached.any_mask != 0,
-                    )
+                // Only use cache for n >= 6 (cache overhead exceeds benefit for smaller puzzles)
+                if n >= 6 {
+                    let cache_key = compute_cache_key(cage, &cells, domains, tier);
+                    if let Some(cached) = state.tuple_cache.get(&cache_key) {
+                        // Cache hit: use cached result
+                        (
+                            cached.per_pos.clone(),
+                            cached.any_mask,
+                            vec![0u64; n],
+                            vec![0u64; n],
+                            cached.any_mask != 0,
+                        )
+                    } else {
+                        // Cache miss: compute and store
+                        let mut per_pos = vec![0u64; cells.len()];
+                        let mut any_mask = 0u64;
+                        enumerate_cage_tuples(
+                            cage,
+                            &cells,
+                            &coords,
+                            domains,
+                            0,
+                            &mut Vec::new(),
+                            &mut per_pos,
+                            &mut any_mask,
+                        );
+
+                        // Store in cache before returning
+                        state.tuple_cache.insert(
+                            cache_key,
+                            CachedTupleResult {
+                                per_pos: per_pos.clone(),
+                                any_mask,
+                            },
+                        );
+
+                        (
+                            per_pos,
+                            any_mask,
+                            vec![0u64; n],
+                            vec![0u64; n],
+                            any_mask != 0,
+                        )
+                    }
                 } else {
-                    // Cache miss: compute and store
+                    // For small puzzles (n <= 5), skip cache and just compute
                     let mut per_pos = vec![0u64; cells.len()];
                     let mut any_mask = 0u64;
                     enumerate_cage_tuples(
@@ -815,15 +862,6 @@ fn apply_cage_deduction(
                         &mut Vec::new(),
                         &mut per_pos,
                         &mut any_mask,
-                    );
-
-                    // Store in cache before returning
-                    state.tuple_cache.insert(
-                        cache_key,
-                        CachedTupleResult {
-                            per_pos: per_pos.clone(),
-                            any_mask,
-                        },
                     );
 
                     (
