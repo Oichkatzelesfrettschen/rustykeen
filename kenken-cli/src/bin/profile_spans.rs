@@ -61,12 +61,10 @@ fn main() {
     }
 
     // Set up tracing with flame layer for span output
-    let (flame_layer, _guard) = tracing_flame::FlameLayer::with_file(&output)
-        .expect("Failed to create flame layer");
+    let (flame_layer, _guard) =
+        tracing_flame::FlameLayer::with_file(&output).expect("Failed to create flame layer");
 
-    tracing_subscriber::registry()
-        .with(flame_layer)
-        .init();
+    tracing_subscriber::registry().with(flame_layer).init();
 
     // Log solver invocation
     info!(

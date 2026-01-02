@@ -65,17 +65,11 @@ impl DomainOps for SmallBitDomain {
     }
 
     fn min(&self) -> Option<u8> {
-        self.bits
-            .iter()
-            .position(|b| b)
-            .map(|i| (i + 1) as u8)
+        self.bits.iter().position(|b| b).map(|i| (i + 1) as u8)
     }
 
     fn max(&self) -> Option<u8> {
-        self.bits
-            .iter()
-            .rposition(|b| b)
-            .map(|i| (i + 1) as u8)
+        self.bits.iter().rposition(|b| b).map(|i| (i + 1) as u8)
     }
 
     fn and(&self, other: &Self) -> Self {

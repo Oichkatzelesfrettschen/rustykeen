@@ -2,7 +2,6 @@
 ///
 /// This tool validates that the OCaml extracted code matches the Rocq formalization
 /// by comparing behavior across test cases.
-
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {

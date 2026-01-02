@@ -168,12 +168,7 @@ fn run() -> Result<(), String> {
     Ok(())
 }
 
-fn benchmark_puzzles(
-    n: u8,
-    count: u32,
-    tier: DeductionTier,
-    rules: Ruleset,
-) -> Result<(), String> {
+fn benchmark_puzzles(n: u8, count: u32, tier: DeductionTier, rules: Ruleset) -> Result<(), String> {
     // Generate benchmark puzzle using cyclic Latin square pattern
     // For sizes 2-16: Uses SGT format
     // For sizes 17-32: Creates Puzzle objects directly
@@ -270,11 +265,7 @@ mod bench_puzzle_tests {
 
         for n in 2..=32 {
             let result = get_benchmark_puzzle(n as u8);
-            assert!(
-                result.is_ok(),
-                "Failed to generate puzzle for n={}",
-                n
-            );
+            assert!(result.is_ok(), "Failed to generate puzzle for n={}", n);
 
             let puzzle = result.unwrap();
 

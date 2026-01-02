@@ -99,17 +99,17 @@ impl DomainOps for Domain32 {
     }
 
     fn insert(&mut self, value: u8) {
-        debug_assert!(value >= 1 && value <= 31);
+        debug_assert!((1..=31).contains(&value));
         self.0 |= 1u32 << (value - 1);
     }
 
     fn remove(&mut self, value: u8) {
-        debug_assert!(value >= 1 && value <= 31);
+        debug_assert!((1..=31).contains(&value));
         self.0 &= !(1u32 << (value - 1));
     }
 
     fn contains(&self, value: u8) -> bool {
-        debug_assert!(value >= 1 && value <= 31);
+        debug_assert!((1..=31).contains(&value));
         (self.0 & (1u32 << (value - 1))) != 0
     }
 
@@ -193,17 +193,17 @@ impl DomainOps for Domain64 {
     }
 
     fn insert(&mut self, value: u8) {
-        debug_assert!(value >= 1 && value <= 63);
+        debug_assert!((1..=63).contains(&value));
         self.0 |= 1u64 << (value - 1);
     }
 
     fn remove(&mut self, value: u8) {
-        debug_assert!(value >= 1 && value <= 63);
+        debug_assert!((1..=63).contains(&value));
         self.0 &= !(1u64 << (value - 1));
     }
 
     fn contains(&self, value: u8) -> bool {
-        debug_assert!(value >= 1 && value <= 63);
+        debug_assert!((1..=63).contains(&value));
         (self.0 & (1u64 << (value - 1))) != 0
     }
 

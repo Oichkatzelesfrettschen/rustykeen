@@ -3,9 +3,9 @@
 
 #[cfg(feature = "solver-dlx")]
 pub mod dlx_latin;
-pub mod domain_ops;
 #[cfg(feature = "solver-fixedbitset")]
 pub mod domain_fixedbitset;
+pub mod domain_ops;
 #[cfg(feature = "solver-u128")]
 pub mod domain_simd128;
 #[cfg(feature = "solver-u256")]
@@ -19,19 +19,19 @@ pub mod nogood;
 pub mod parallel;
 #[cfg(feature = "sat-varisat")]
 pub mod sat_cages;
-#[cfg(feature = "symmetry-breaking")]
-pub mod symmetry;
 #[cfg(feature = "sat-varisat")]
 pub mod sat_common;
 #[cfg(feature = "sat-varisat")]
 pub mod sat_latin;
 pub mod solver;
+#[cfg(feature = "symmetry-breaking")]
+pub mod symmetry;
 #[cfg(feature = "verify")]
 pub mod z3_verify;
 
-pub use crate::domain_ops::{Domain32, Domain64, DomainOps};
 #[cfg(feature = "solver-fixedbitset")]
 pub use crate::domain_fixedbitset::FixedBitDomain;
+pub use crate::domain_ops::{Domain32, Domain64, DomainOps};
 #[cfg(feature = "solver-u128")]
 pub use crate::domain_simd128::Domain128;
 #[cfg(feature = "solver-u256")]
@@ -66,7 +66,8 @@ fn validate_grid_size(n: u8) -> Result<(), SolveError> {
     if n > 63 {
         return Err(SolveError::GridSizeTooLarge {
             n,
-            hint: "Grid size exceeds 63. Enable 'solver-bitdomain' feature for >63 support".to_string(),
+            hint: "Grid size exceeds 63. Enable 'solver-bitdomain' feature for >63 support"
+                .to_string(),
         });
     }
 
@@ -84,7 +85,10 @@ fn validate_grid_size(n: u8) -> Result<(), SolveError> {
 ///
 /// This is a dispatch wrapper that validates the puzzle can be solved
 /// with the current feature configuration before attempting to solve it.
-pub fn solve_one_dispatched(puzzle: &Puzzle, rules: Ruleset) -> Result<Option<Solution>, SolveError> {
+pub fn solve_one_dispatched(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<Option<Solution>, SolveError> {
     validate_grid_size(puzzle.n)?;
     solver::solve_one(puzzle, rules)
 }

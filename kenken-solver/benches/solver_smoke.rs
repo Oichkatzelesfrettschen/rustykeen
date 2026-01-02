@@ -18,12 +18,12 @@
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use pprof::criterion::{Output, PProfProfiler};
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::rules::Ruleset;
 use kenken_solver::{
     DeductionTier, count_solutions_up_to_with_deductions, solve_one_with_deductions,
 };
+use pprof::criterion::{Output, PProfProfiler};
 
 /// Puzzles from the golden corpus for benchmarking.
 fn benchmark_puzzles() -> Vec<(u8, &'static str, &'static str)> {

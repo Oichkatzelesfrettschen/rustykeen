@@ -11,25 +11,20 @@
 /// Flamegraph Output:
 /// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
 /// - Run with `cargo bench --bench simd_effectiveness` to generate profiling data
-
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
+use kenken_simd::{popcount_u32, popcount_u32_slice_sum, popcount_u64};
 use pprof::criterion::{Output, PProfProfiler};
-use kenken_simd::{popcount_u32, popcount_u64, popcount_u32_slice_sum};
 
 fn benchmark_popcount_u32_single(c: &mut Criterion) {
     let val = std::hint::black_box(0xDEADBEEFu32);
 
-    c.bench_function("popcount_u32_single", |b| {
-        b.iter(|| popcount_u32(val))
-    });
+    c.bench_function("popcount_u32_single", |b| b.iter(|| popcount_u32(val)));
 }
 
 fn benchmark_popcount_u64_single(c: &mut Criterion) {
     let val = std::hint::black_box(0xDEADBEEFDEADBEEFu64);
 
-    c.bench_function("popcount_u64_single", |b| {
-        b.iter(|| popcount_u64(val))
-    });
+    c.bench_function("popcount_u64_single", |b| b.iter(|| popcount_u64(val)));
 }
 
 fn benchmark_popcount_u32_slice_small(c: &mut Criterion) {

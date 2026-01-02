@@ -1,3 +1,6 @@
+use kenken_core::format::sgt_desc::parse_keen_desc;
+use kenken_core::rules::Ruleset;
+use kenken_solver::{DeductionTier, solve_one_with_deductions};
 /// Heap allocation profiling for KenKen solver
 ///
 /// Uses dhat-rs for detailed heap profiling to identify allocation patterns
@@ -8,11 +11,7 @@
 /// Usage:
 ///   cargo build --release --bin heap_profile --features "dhat-heap"
 ///   ./target/release/heap_profile --n 3 --desc "f_6,a6a6a6" --tier normal
-
 use std::env;
-use kenken_core::format::sgt_desc::parse_keen_desc;
-use kenken_core::rules::Ruleset;
-use kenken_solver::{DeductionTier, solve_one_with_deductions};
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
@@ -103,7 +102,10 @@ fn main() {
                 }
             }
 
-            eprintln!("Heap profiling complete: {} iterations of {}x{}", iterations, n, n);
+            eprintln!(
+                "Heap profiling complete: {} iterations of {}x{}",
+                iterations, n, n
+            );
             #[cfg(feature = "dhat-heap")]
             eprintln!("Heap profile saved to dhat-heap.json");
         }
