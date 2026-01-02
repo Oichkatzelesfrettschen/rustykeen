@@ -472,12 +472,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dlx-rs"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7b06b8872225caed8fe68316c391111d055aca97223461eedec5b34482c9c25"
-
-[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -772,7 +766,6 @@ dependencies = [
  "bumpalo",
  "criterion",
  "dhat",
- "dlx-rs",
  "fixedbitset",
  "kenken-core",
  "kenken-simd",

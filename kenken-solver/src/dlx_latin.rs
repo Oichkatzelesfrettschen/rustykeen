@@ -1,9 +1,9 @@
-//! Latin-square exact-cover utilities using DLX (`dlx-rs`).
+//! Latin-square exact-cover utilities using internal DLX implementation.
 //!
 //! This module intentionally encodes only the Latin constraints (cell, row-digit, col-digit).
 //! Cage constraints remain in the main solver (and future SAT encodings).
 //!
-use dlx_rs::Solver;
+use crate::dlx::Solver;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct LatinChoice {

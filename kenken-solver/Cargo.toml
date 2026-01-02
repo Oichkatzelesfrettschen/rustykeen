@@ -14,7 +14,6 @@ kenken-simd = { path = "../kenken-simd", optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, optional = true }
 bumpalo = { version = "3", optional = true, features = ["collections"] }
-dlx_rs = { package = "dlx-rs", version = "1", optional = true }
 varisat = { version = "0.2", optional = true }
 z3 = { version = "0.12", optional = true }
 fixedbitset = { workspace = true, optional = true }
@@ -29,7 +28,7 @@ std = []
 tracing = ["dep:tracing"]
 perf-likely = []
 alloc-bumpalo = ["dep:bumpalo"]
-solver-dlx = ["dep:dlx_rs"]
+solver-dlx = []
 solver-u64 = ["kenken-core/core-u64"]
 solver-u128 = ["simd-dispatch"]
 solver-u256 = ["simd-dispatch"]

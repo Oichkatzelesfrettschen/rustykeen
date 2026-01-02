@@ -2,6 +2,8 @@
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "solver-dlx")]
+mod dlx;
+#[cfg(feature = "solver-dlx")]
 pub mod dlx_latin;
 #[cfg(feature = "solver-fixedbitset")]
 pub mod domain_fixedbitset;
