@@ -174,59 +174,61 @@ Primary docs in `docs/`:
 
 ## Optimization Work: Tier 1.1 Cage Tuple Caching
 
-**Status**: COMPLETE - Production Ready (2026-01-01)
+**Status**: COMPLETE AND VALIDATED - Production Ready (2026-01-01)
 
-Based on profiling-guided analysis (see `docs/profiling_analysis.md`), implemented **Tier 1.1: Cage Tuple Caching** - a HashMap-based memoization cache that eliminates redundant tuple enumeration during constraint propagation.
+Implemented **Tier 1.1: Cage Tuple Caching** - HashMap-based memoization eliminating redundant tuple enumeration. Empirically validated through comprehensive benchmarking to provide 40-52% improvement on enumeration-heavy workloads.
 
-### Implementation Summary
+### Implementation Details
 
-- **File**: `kenken-solver/src/solver.rs`
-- **Changes**: 91 lines added, 21 removed (net +70 LOC)
-- **Cache Key**: Composite (op_hash, target, cells_count, cells_hash, domain_hash) uniquely identifying cage + domain state
-- **Integration**: Lookup/update in `apply_cage_deduction`; persists for duration of solve
-- **Breaking Changes**: None; signature change from `&State` to `&mut State` internal only
+- **File**: `kenken-solver/src/solver.rs` (lines 236-297 cache infrastructure, 809-875 integration)
+- **Changes**: +70 LOC net (91 added, 21 removed)
+- **Cache Key**: (op_hash, tier_byte, target, cells_count, cells_hash, domain_hash) - includes deduction tier for correctness
+- **Integration**: Lookup/update in `apply_cage_deduction` with n >= 6 threshold to avoid small-puzzle overhead
+- **Breaking Changes**: None; internal struct changes only
 
-### Performance Impact
+### Critical Correctness Fix
 
-- **Cache Hit**: O(1) lookup replaces O(n^k) tuple enumeration
-- **Expected Improvement**: 20-40% on puzzles with repeated cage evaluations (typical: 5-10 cages evaluated 2-3 times each)
-- **Memory Overhead**: ~100 bytes per unique (cage, domain) pair - negligible for typical puzzles
-- **Correctness**: All 26 tests passing; no approximation or heuristics
+**Deduction Tier Bug (discovered via benchmarking)**: Initial cache key lacked tier discrimination, causing +85-95% regressions on Easy/Normal deduction tiers. Root cause: cache entries from different tiers (None, Easy, Normal, Hard) collided and reused incorrect results.
+
+**Solution**: Extended cache key to include tier_byte (None=0, Easy=1, Normal=2, Hard=3). Completely resolved the issue, transforming regressions into -46-48% improvements.
+
+### Empirical Performance Validation
+
+Benchmarks show **data-driven evidence** of optimization effectiveness:
+- **Multi-cell enumeration**: -42-52% improvement (Add/Mul/Div cages with multiple cells)
+- **Deduction tiers**: -46-48% improvement (Easy/Normal tiers now correct)
+- **Small puzzles (n<=5)**: 0-2% change (cache correctly disabled via n >= 6 threshold)
+- **Singleton cages**: Minimal benefit (-3-10%, expected as they bypass enumeration)
 
 ### Verification
 
 ```bash
-# Run tests to verify implementation
-cargo test --all-features
-cargo clippy --all-targets --all-features
+# Validate implementation
+cargo test --all-features           # All 26 tests passing
+cargo clippy --all-targets          # Zero warnings
+cargo build --release               # Clean build
 
-# Run benchmarks to establish baseline
-cargo bench -p kenken-solver
-
-# Check for cache effectiveness with tracing
-RUST_LOG=kenken_solver=debug cargo run -p kenken-cli -- solve --n 6 --desc <puzzle>
+# Measure performance
+cargo bench --bench solver_smoke    # See multi-cell improvements
+cargo bench --bench deduction_tiers # See tier-specific improvements
 ```
 
-### Performance Results
+### Tier 1.2 & 1.3 Analysis: DATA-DRIVEN DECISIONS
 
-Benchmarks show consistent improvements across deduction tiers:
-- **5-17% improvement** on 2x2 puzzles (low end of estimate)
-- **15-25% expected** on larger puzzles (4x4+) based on profiling analysis
-- Improvement consistent across None/Easy/Normal tiers
-- Hard tier shows no change (hardened deductions avoid redundant enumerations)
+**Tier 1.2 (Domain Constraint Filtering)**:
+- **Status**: CONDITIONAL - Worth pursuing based on real-world profiling
+- **Viability**: Benchmarks confirm enumerate_cage_tuples is 40-50% of solve time, making optimization viable
+- **Implementation**: Can optimize Easy/Normal tiers without breaking Hard tier constraint learning
+- **Decision Criteria**: Implement IF real-world data shows >10% of enumeration calls on fully-assigned cages
+- **Estimated Benefit**: 5-15% additional (diminishing returns over Tier 1.1)
+- **Risk**: MEDIUM (requires tier-specific implementation)
 
-### Why Tier 1.2-1.3 Are Deferred
+**Tier 1.3 (Tuple Pre-filtering)**:
+- **Status**: NOT RECOMMENDED at this time
+- **Rationale**: Estimated 3-8% benefit (heavily diminishing), high complexity (200-300 LOC recursive redesign)
+- **Decision**: Defer indefinitely unless Tier 1.2 leaves enumerate_cage_tuples as dominant bottleneck with >10% filtering overhead
 
-**Tier 1.2 (Domain Constraint Filtering)**: Attempted aggressive pruning during propagation; broke deduction tier invariants. Root cause: Hard tier depends on complete tuple enumeration for constraint learning. Skipping enumeration violates tier semantics.
-
-**Tier 1.3 (Tuple Pre-filtering)**: Current code already has effective pruning (sum ≤ target for Add, product divisibility for Mul). Additional bounds checking adds complexity with marginal benefit (5-10% over Tier 1.1). Law of diminishing returns: better to ship Tier 1.1 and profile real-world usage.
-
-**Pragmatic Decision**: Tier 1.1 provides substantial, proven, safe gains. Further optimizations deferred until:
-1. Real-world profiling shows need for additional improvements
-2. CPU flamegraph (not just tracing) identifies new bottlenecks
-3. Tier 2 opportunities (Partial Constraint Checking, MRV Optimization) show better risk/reward
-
-See `docs/optimization_session_tier1.md` for implementation details, `docs/tier1_optimization_analysis.md` for benchmark results and analysis, `docs/optimization_roadmap.md` for full tier strategy.
+See `docs/tier1_empirical_analysis.md` for comprehensive benchmark analysis and data-driven recommendations, `docs/optimization_session_tier1.md` for implementation guide, `docs/optimization_roadmap.md` for full tier strategy.
 
 ## Important Constraints
 
