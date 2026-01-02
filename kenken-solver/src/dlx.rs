@@ -41,6 +41,16 @@ impl<T: Clone> Solver<T> {
 
     /// Add an option (row) that covers the given constraints (columns)
     pub fn add_option(&mut self, data: T, constraints: &[usize]) {
+        // Validate that all constraint indices are within 1..=n_constraints
+        if let Some(&invalid) = constraints
+            .iter()
+            .find(|&&c| c == 0 || c > self.n_constraints)
+        {
+            panic!(
+                "add_option: constraint index {} out of bounds (valid range is 1..={} with 0 reserved)",
+                invalid, self.n_constraints
+            );
+        }
         self.options.push((data.clone(), constraints.to_vec()));
     }
 
