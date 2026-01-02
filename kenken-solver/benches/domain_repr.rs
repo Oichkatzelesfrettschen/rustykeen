@@ -168,19 +168,84 @@ fn bench_solver_workload(c: &mut Criterion) {
         ],
     };
 
+    // 4x4 puzzle
+    let puzzle_4x4 = Puzzle {
+        n: 4,
+        cages: vec![
+            Cage {
+                cells: smallvec::smallvec![CellId(0), CellId(1)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(2), CellId(3)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(4), CellId(5)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(6), CellId(7)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(8), CellId(9)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(10), CellId(11)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(12), CellId(13)],
+                op: Op::Add,
+                target: 5,
+            },
+            Cage {
+                cells: smallvec::smallvec![CellId(14), CellId(15)],
+                op: Op::Add,
+                target: 5,
+            },
+        ],
+    };
+
     let rules = Ruleset::keen_baseline();
 
-    group.bench_function(
-        BenchmarkId::new("Domain32", "2x2"),
-        |b| {
-            b.iter(|| {
-                let _result = kenken_solver::solve_one(
-                    black_box(&puzzle_2x2),
-                    black_box(rules),
-                );
-            });
-        },
-    );
+    for (puzzle_size, puzzle) in &[(2, &puzzle_2x2), (4, &puzzle_4x4)] {
+        // Domain32
+        group.bench_function(
+            BenchmarkId::new("Domain32", format!("{}x{}", puzzle_size, puzzle_size)),
+            |b| {
+                b.iter(|| {
+                    let _result = kenken_solver::solve_one(
+                        black_box(puzzle),
+                        black_box(rules),
+                    );
+                });
+            },
+        );
+
+        // Domain64 (if applicable)
+        if *puzzle_size <= 8 {
+            group.bench_function(
+                BenchmarkId::new("Domain64", format!("{}x{}", puzzle_size, puzzle_size)),
+                |b| {
+                    b.iter(|| {
+                        let _result = kenken_solver::solve_one(
+                            black_box(puzzle),
+                            black_box(rules),
+                        );
+                    });
+                },
+            );
+        }
+    }
 
     group.finish();
 }
