@@ -21,6 +21,7 @@ z3 = { version = "0.12", optional = true }
 fixedbitset = { workspace = true, optional = true }
 smallbitvec = { workspace = true, optional = true }
 smallvec.workspace = true
+dhat = { version = "0.3", optional = true }
 
 [features]
 default = ["std", "tracing"]
@@ -36,6 +37,7 @@ simd-dispatch = ["dep:kenken-simd"]
 verify = ["dep:z3"]
 solver-fixedbitset = ["dep:fixedbitset"]
 solver-smallbitvec = ["dep:smallbitvec"]
+dhat-heap = ["dep:dhat"]
 
 [dev-dependencies]
 criterion.workspace = true
