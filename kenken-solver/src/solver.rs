@@ -226,6 +226,9 @@ fn search_with_stats_deducing(
         return Ok(0);
     }
 
+    // Tier 2.2: Cache needs recomputation after propagation modifies domains
+    state.mrv_cache.valid = false;
+
     let mut count = 0u32;
     backtrack_deducing(
         puzzle, rules, tier, limit, first, &mut state, &mut count, 0, stats,
@@ -498,6 +501,11 @@ fn backtrack_deducing(
                 propagate(puzzle, rules, tier, state, &mut forced)?
             };
 
+        // Tier 2.2: Invalidate MRV cache after propagation modifies domains
+        if feasible && tier != DeductionTier::None {
+            state.mrv_cache.valid = false;
+        }
+
         if likely(feasible) {
             backtrack_deducing(
                 puzzle,
@@ -638,10 +646,30 @@ fn classify_difficulty_from_stats(stats: SolveStats) -> DifficultyTier {
     }
 }
 
-#[instrument(skip(puzzle, state), fields(n = state.n, mrv_count = 0), level = "debug")]
-fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u64)>, SolveError> {
+#[instrument(skip(puzzle, state), fields(n = state.n, cached = false), level = "debug")]
+fn choose_mrv_cell(puzzle: &Puzzle, state: &mut State) -> Result<Option<(usize, u64)>, SolveError> {
     let n = state.n as usize;
     let a = n * n;
+
+    // Phase 2 optimization: use cache if still valid and no dirty cells
+    // When cache is valid, we can return the cached min_cell without rescanning
+    if state.mrv_cache.valid && !state.mrv_cache.has_dirty_cells() {
+        // Cache hit: return cached result
+        let min_idx = state.mrv_cache.min_cell;
+        if state.grid[min_idx] == 0 {
+            // Cell still unfilled; use cached domain computation
+            let row = min_idx / n;
+            let col = min_idx % n;
+            if let Ok(dom) = domain_for_cell(puzzle, state, min_idx, row, col) {
+                if popcount_u64(dom) > 0 {
+                    return Ok(Some((min_idx, dom)));
+                }
+            }
+        }
+        // Cache miss (cell filled or domain empty): invalidate and rescan
+    }
+
+    // Cache miss or invalid: full rescan
     let mut best: Option<(usize, u64, u32)> = None; // (idx, domain, popcnt)
 
     for idx in 0..a {
@@ -663,6 +691,14 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u64)
         if best.is_some_and(|(_, _, p)| p == 1) {
             break;
         }
+    }
+
+    // Update cache with new result before returning (Tier 2.2 optimization)
+    if let Some((idx, _dom, pop)) = best {
+        state.mrv_cache.min_cell = idx;
+        state.mrv_cache.min_count = pop;
+        state.mrv_cache.valid = true;
+        state.mrv_cache.reset_dirty();
     }
 
     Ok(best.map(|(idx, dom, _)| (idx, dom)))
@@ -1930,6 +1966,9 @@ fn unplace(state: &mut State, row: usize, col: usize, d: u8) {
     state.grid[idx] = 0;
     state.row_mask[row] &= !(1u64 << (d as u32));
     state.col_mask[col] &= !(1u64 << (d as u32));
+
+    // Tier 2.2: Invalidate MRV cache when domains change (unplace expands domains)
+    state.mrv_cache.valid = false;
 }
 
 fn full_domain(n: u8) -> u64 {
