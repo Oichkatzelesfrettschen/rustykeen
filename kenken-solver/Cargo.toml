@@ -13,7 +13,6 @@ kenken-core = { path = "../kenken-core" }
 kenken-simd = { path = "../kenken-simd", optional = true }
 thiserror.workspace = true
 tracing = { workspace = true, optional = true }
-likely_stable = { version = "0.1", optional = true }
 bumpalo = { version = "3", optional = true, features = ["collections"] }
 dlx_rs = { package = "dlx-rs", version = "1", optional = true }
 varisat = { version = "0.2", optional = true }
@@ -28,7 +27,7 @@ rayon = { version = "1.10", optional = true }
 default = ["std", "tracing"]
 std = []
 tracing = ["dep:tracing"]
-perf-likely = ["dep:likely_stable"]
+perf-likely = []
 alloc-bumpalo = ["dep:bumpalo"]
 solver-dlx = ["dep:dlx_rs"]
 solver-u64 = ["kenken-core/core-u64"]

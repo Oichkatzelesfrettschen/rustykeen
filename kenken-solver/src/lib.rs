@@ -13,6 +13,7 @@ pub mod domain_simd256;
 #[cfg(feature = "solver-smallbitvec")]
 pub mod domain_smallbitvec;
 pub mod error;
+mod hints;
 #[cfg(feature = "nogood-learning")]
 pub mod nogood;
 #[cfg(feature = "parallel-search")]

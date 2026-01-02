@@ -7,7 +7,7 @@
 //!
 //! Feature flags:
 //! - `tracing`: enables `tracing::trace!` in hot paths (no subscriber required by the library).
-//! - `perf-likely`: enables branch prediction hints via `likely_stable`.
+//! - `perf-likely`: enables branch prediction hints for hot paths.
 //! - `alloc-bumpalo`: uses `bumpalo` scratch arenas for propagation temporaries.
 //!
 use kenken_core::rules::{Op, Ruleset};
@@ -27,9 +27,10 @@ macro_rules! instrument {
 }
 
 #[cfg(feature = "perf-likely")]
-use likely_stable::likely;
+use crate::hints::likely;
 
 #[cfg(not(feature = "perf-likely"))]
+#[inline(always)]
 fn likely(v: bool) -> bool {
     v
 }
