@@ -180,6 +180,7 @@ fn search_with_stats(
         row_mask: vec![0u64; n],
         col_mask: vec![0u64; n],
         cage_of_cell,
+        tuple_cache: HashMap::new(),
     };
 
     let mut count = 0u32;
@@ -215,6 +216,7 @@ fn search_with_stats_deducing(
         row_mask: vec![0u64; n],
         col_mask: vec![0u64; n],
         cage_of_cell,
+        tuple_cache: HashMap::new(),
     };
 
     let mut forced = Vec::new();
@@ -229,12 +231,56 @@ fn search_with_stats_deducing(
     Ok(count)
 }
 
+use std::collections::HashMap;
+
+/// Cache key for memoizing enumerate_cage_tuples results.
+/// Key: (op_hash, target, cells_count, cells_hash, domain_state_hash)
+type CacheTupleKey = (u8, i32, usize, u64, u64);
+
+/// Cached result from enumerate_cage_tuples.
+#[derive(Clone)]
+struct CachedTupleResult {
+    per_pos: Vec<u64>,
+    any_mask: u64,
+}
+
 struct State {
     n: u8,
     grid: Vec<u8>,
     row_mask: Vec<u64>,  // Extended to u64 to support n <= 63
     col_mask: Vec<u64>,  // Extended to u64 to support n <= 63
     cage_of_cell: Vec<usize>,
+    /// Memoization cache for enumerate_cage_tuples results.
+    /// Maps (cage_signature, domain_hash) -> (per_pos, any_mask).
+    tuple_cache: HashMap<CacheTupleKey, CachedTupleResult>,
+}
+
+/// Compute a cache key for a cage's tuple enumeration.
+/// Uses a hash of the cage's cells and the domain state for those cells.
+#[inline]
+fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64]) -> CacheTupleKey {
+    // Simple hash of cell indices
+    let mut cells_hash = 0u64;
+    for &cell in cells.iter() {
+        cells_hash = cells_hash.wrapping_mul(31).wrapping_add(cell as u64);
+    }
+
+    // Hash of domain state for cage cells
+    let mut domain_hash = 0u64;
+    for &cell in cells {
+        domain_hash = domain_hash.wrapping_mul(31).wrapping_add(domains[cell]);
+    }
+
+    // Use Op::Add as 0, Op::Sub as 1, Op::Div as 2, Op::Mul as 3, Op::Eq as 4
+    let op_byte = match cage.op {
+        Op::Add => 0u8,
+        Op::Sub => 1u8,
+        Op::Div => 2u8,
+        Op::Mul => 3u8,
+        Op::Eq => 4u8,
+    };
+
+    (op_byte, cage.target, cells.len(), cells_hash, domain_hash)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -640,7 +686,7 @@ fn propagate(
 fn apply_cage_deduction(
     _puzzle: &Puzzle,
     rules: Ruleset,
-    state: &State,
+    state: &mut State,
     cage: &Cage,
     tier: DeductionTier,
     domains: &mut [u64],
@@ -745,25 +791,49 @@ fn apply_cage_deduction(
             let (per_pos, any_mask, must_row, must_col, found) = if tier == DeductionTier::Hard {
                 enumerate_cage_tuples_with_must(n, cage, &cells, &coords, domains)
             } else {
-                let mut per_pos = vec![0u64; cells.len()];
-                let mut any_mask = 0u64;
-                enumerate_cage_tuples(
-                    cage,
-                    &cells,
-                    &coords,
-                    domains,
-                    0,
-                    &mut Vec::new(),
-                    &mut per_pos,
-                    &mut any_mask,
-                );
-                (
-                    per_pos,
-                    any_mask,
-                    vec![0u64; n],
-                    vec![0u64; n],
-                    any_mask != 0,
-                )
+                // Try cache lookup first
+                let cache_key = compute_cache_key(cage, &cells, domains);
+                if let Some(cached) = state.tuple_cache.get(&cache_key) {
+                    // Cache hit: use cached result
+                    (
+                        cached.per_pos.clone(),
+                        cached.any_mask,
+                        vec![0u64; n],
+                        vec![0u64; n],
+                        cached.any_mask != 0,
+                    )
+                } else {
+                    // Cache miss: compute and store
+                    let mut per_pos = vec![0u64; cells.len()];
+                    let mut any_mask = 0u64;
+                    enumerate_cage_tuples(
+                        cage,
+                        &cells,
+                        &coords,
+                        domains,
+                        0,
+                        &mut Vec::new(),
+                        &mut per_pos,
+                        &mut any_mask,
+                    );
+
+                    // Store in cache before returning
+                    state.tuple_cache.insert(
+                        cache_key,
+                        CachedTupleResult {
+                            per_pos: per_pos.clone(),
+                            any_mask,
+                        },
+                    );
+
+                    (
+                        per_pos,
+                        any_mask,
+                        vec![0u64; n],
+                        vec![0u64; n],
+                        any_mask != 0,
+                    )
+                }
             };
 
             if tier == DeductionTier::Easy {
@@ -818,7 +888,7 @@ fn apply_cage_deduction_with_bump(
     bump: &Bump,
     _puzzle: &Puzzle,
     rules: Ruleset,
-    state: &State,
+    state: &mut State,
     cage: &Cage,
     tier: DeductionTier,
     domains: &mut [u64],
