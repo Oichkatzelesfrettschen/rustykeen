@@ -5,7 +5,7 @@ This repo is **library-first** and **cleanroom-driven**. Dependency policy:
 - Introduce “heavy” capabilities behind Cargo features.
 - Record a clear mapping: crate → purpose → feature gate → where used.
 
-For the aspirational 2026 stack list, see `docs/crate_audit_list.md` and `docs/dependency_matrix.md`.
+For the aspirational 2026 stack list, see `docs/crates_audit.md` and `docs/dependency_matrix.md`.
 
 ## Workspace crates (current)
 - `kenken-core`

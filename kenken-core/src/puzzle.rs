@@ -44,7 +44,20 @@ mod _layout_assertions {
 impl Puzzle {
     pub fn validate(&self, rules: Ruleset) -> Result<(), CoreError> {
         let n = self.n;
-        if !(1..=16).contains(&n) {
+
+        // Feature-gated grid size validation
+        #[cfg(not(any(feature = "core-u64", feature = "core-bitvec")))]
+        if !(1..=31).contains(&n) {
+            return Err(CoreError::InvalidGridSize(n));
+        }
+
+        #[cfg(all(feature = "core-u64", not(feature = "core-bitvec")))]
+        if !(1..=63).contains(&n) {
+            return Err(CoreError::InvalidGridSize(n));
+        }
+
+        #[cfg(feature = "core-bitvec")]
+        if !(1..=255).contains(&n) {
             return Err(CoreError::InvalidGridSize(n));
         }
         let a = (n as usize) * (n as usize);
@@ -416,6 +429,118 @@ fn is_orthogonally_connected(n: u8, cells: &[CellId]) -> bool {
     }
 
     count == cells.len()
+}
+
+// ============================================================
+// Kani Verification Harnesses
+// ============================================================
+//
+// Run with: cargo kani --harness <harness_name>
+// Or run all: cargo kani
+
+#[cfg(kani)]
+mod kani_verification {
+    use super::*;
+
+    /// Proves cell_id and coord form a roundtrip bijection for valid inputs.
+    ///
+    /// For any valid grid size N and coordinate (row, col) where row < N and col < N:
+    /// - cell_id(N, Coord{row, col}) produces a CellId
+    /// - coord(N, that_cell_id) returns the original (row, col)
+    #[kani::proof]
+    fn cell_coord_roundtrip() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: u8 = kani::any();
+        let col: u8 = kani::any();
+        kani::assume(row < n && col < n);
+
+        let c = Coord { row, col };
+        let cell = cell_id(n, c).expect("cell_id should succeed for valid coords");
+        let back = coord(n, cell).expect("coord should succeed for valid cell");
+
+        kani::assert(back.row == row, "row roundtrip failed");
+        kani::assert(back.col == col, "col roundtrip failed");
+    }
+
+    /// Proves cell index calculation is always in bounds.
+    ///
+    /// For any N in [2,9] and CellId < N*N, cell_index returns a valid index.
+    #[kani::proof]
+    fn cell_index_bounds() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let cell_val: u16 = kani::any();
+        let a = (n as u16) * (n as u16);
+        kani::assume(cell_val < a);
+
+        let cell = CellId(cell_val);
+        let idx = cell_index(n, cell).expect("cell_index should succeed");
+
+        kani::assert(idx < (n as usize) * (n as usize), "index out of bounds");
+    }
+
+    /// Proves that cell_id rejects out-of-bounds coordinates.
+    #[kani::proof]
+    fn cell_id_rejects_oob() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: u8 = kani::any();
+        let col: u8 = kani::any();
+
+        // Either row or col is out of bounds
+        kani::assume(row >= n || col >= n);
+
+        let c = Coord { row, col };
+        let result = cell_id(n, c);
+
+        kani::assert(result.is_err(), "should reject OOB coordinates");
+    }
+
+    /// Proves that coord rejects out-of-bounds cell IDs.
+    #[kani::proof]
+    fn coord_rejects_oob() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let cell_val: u16 = kani::any();
+        let a = (n as u16) * (n as u16);
+        kani::assume(cell_val >= a);
+
+        let cell = CellId(cell_val);
+        let result = coord(n, cell);
+
+        kani::assert(result.is_err(), "should reject OOB cell ID");
+    }
+
+    /// Proves CellId ordering matches row-major grid position.
+    #[kani::proof]
+    fn cellid_ordering_is_row_major() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let r1: u8 = kani::any();
+        let c1: u8 = kani::any();
+        let r2: u8 = kani::any();
+        let c2: u8 = kani::any();
+
+        kani::assume(r1 < n && c1 < n && r2 < n && c2 < n);
+
+        let coord1 = Coord { row: r1, col: c1 };
+        let coord2 = Coord { row: r2, col: c2 };
+
+        let cell1 = cell_id(n, coord1).unwrap();
+        let cell2 = cell_id(n, coord2).unwrap();
+
+        // If (r1, c1) < (r2, c2) in row-major order, then cell1 < cell2
+        let row_major_less = r1 < r2 || (r1 == r2 && c1 < c2);
+        let cellid_less = cell1 < cell2;
+
+        kani::assert(row_major_less == cellid_less, "ordering mismatch");
+    }
 }
 
 #[cfg(test)]

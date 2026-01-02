@@ -56,10 +56,38 @@ For larger cages we use a tuple-table selector encoding (bounded by thresholds):
 - Each selector implies all chosen values for all cells.
 
 Guardrails:
-- If tuple count exceeds a threshold (depends on N, op, and cage size), do not encode this way:
+- If tuple count exceeds the threshold `SAT_TUPLE_THRESHOLD` (currently 512), do not encode this way:
   - fall back to native solver enumeration (count up to 2 with early exit); or
   - use alternative encodings (sequential counters / pseudo-Boolean) once implemented; or
   - use SMT (Z3) in an optional certification path.
+
+### 3.4 SAT_TUPLE_THRESHOLD = 512 justification
+
+The threshold of 512 is chosen as a balance between:
+
+**Upper bound on selector variables**: Each tuple requires one selector variable plus implications.
+For a k-cell cage with T tuples:
+- T selector variables
+- 2*k*T implication clauses (selector → cell value, both directions)
+- T*(T-1)/2 at-most-one clauses for selectors
+
+At T=512 with k=4 (common Add cage), this is ~512 + 4096 + 130816 ≈ 135k clauses.
+Beyond this, the CNF size grows rapidly and may dominate solve time.
+
+**Practical cage bounds**: For baseline rulesets (N ≤ 9, cages ≤ 6 cells):
+- 2-cell Add: at most (N-1) tuples (e.g., 8 for N=9) — well under threshold
+- 3-cell Add: at most ~80 tuples for N=9 — under threshold
+- 4-cell Add with high target: can reach hundreds of tuples — near threshold
+- 5+ cell Mul: can explode (e.g., 6 cells of {1,2} factors) — may exceed threshold
+
+**Empirical observation**: In testing with N=6 and N=9 puzzles, cages exceeding 512 tuples
+are rare (<1% of generated puzzles) and often indicate degenerate or invalid configurations.
+
+**Fallback cost**: When threshold is exceeded, the fallback is `count_solutions_up_to(..., limit=2)`
+which uses native backtracking. For small puzzles this is fast; the SAT path is primarily
+valuable for larger puzzles where native enumeration would be slow anyway.
+
+The threshold can be adjusted via `SAT_TUPLE_THRESHOLD` in `kenken-solver/src/sat_cages.rs`.
 
 ## 4) Uniqueness via SAT
 

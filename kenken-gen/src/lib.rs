@@ -7,7 +7,13 @@ use kenken_solver::error::SolveError;
 use kenken_solver::{DeductionTier, count_solutions_up_to_with_deductions};
 
 pub mod generator;
+pub mod minimizer;
 pub mod seed;
+
+pub use generator::{
+    GenerateConfig, GeneratedPuzzle, GeneratedPuzzleWithStats, generate, generate_with_stats,
+};
+pub use minimizer::{MinimizeConfig, MinimizeResult, minimize_puzzle};
 
 #[derive(thiserror::Error, Debug)]
 pub enum GenError {

@@ -1,0 +1,9 @@
+-Q rcoq KenKen
+-arg -w -arg -notation-overridden,-redundant-pattern-matching,-ambiguous-paths
+COQDOC := $(COQDOC) --parse-comments --utf8
+
+rcoq/KenKen/Core.v
+rcoq/KenKen/Search.v
+rcoq/KenKen/Uniqueness.v
+rcoq/KenKen/Integration.v
+rcoq/KenKen/Extraction.v

@@ -4,6 +4,7 @@
 #![deny(warnings)]
 #![doc = include_str!("../README.md")]
 
+#[cfg(feature = "gen")]
 use kenken_core::format::sgt_desc::encode_keen_desc;
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::rules::Ruleset;

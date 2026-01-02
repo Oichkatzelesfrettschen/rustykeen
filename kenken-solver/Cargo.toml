@@ -17,6 +17,9 @@ likely_stable = { version = "0.1", optional = true }
 bumpalo = { version = "3", optional = true, features = ["collections"] }
 dlx_rs = { package = "dlx-rs", version = "1", optional = true }
 varisat = { version = "0.2", optional = true }
+z3 = { version = "0.12", optional = true }
+fixedbitset = { workspace = true, optional = true }
+smallbitvec = { workspace = true, optional = true }
 smallvec.workspace = true
 
 [features]
@@ -26,5 +29,33 @@ tracing = ["dep:tracing"]
 perf-likely = ["dep:likely_stable"]
 alloc-bumpalo = ["dep:bumpalo"]
 solver-dlx = ["dep:dlx_rs"]
+solver-u64 = ["kenken-core/core-u64"]
+solver-bitdomain = ["kenken-core/core-bitvec"]
 sat-varisat = ["dep:varisat"]
 simd-dispatch = ["dep:kenken-simd"]
+verify = ["dep:z3"]
+solver-fixedbitset = ["dep:fixedbitset"]
+solver-smallbitvec = ["dep:smallbitvec"]
+
+[dev-dependencies]
+criterion.workspace = true
+pprof.workspace = true
+proptest.workspace = true
+kenken-core = { path = "../kenken-core" }
+kenken-simd = { path = "../kenken-simd" }
+
+[[bench]]
+name = "solver_smoke"
+harness = false
+
+[[bench]]
+name = "solver_scaling"
+harness = false
+
+[[bench]]
+name = "simd_effectiveness"
+harness = false
+
+[[bench]]
+name = "domain_repr"
+harness = false

@@ -14,6 +14,11 @@ pub fn popcount_u32(x: u32) -> u32 {
     (IMPL.get_or_init(select_popcount_u32))(x)
 }
 
+pub fn popcount_u64(x: u64) -> u32 {
+    static IMPL: OnceLock<fn(u64) -> u32> = OnceLock::new();
+    (IMPL.get_or_init(select_popcount_u64))(x)
+}
+
 fn select_popcount_u32() -> fn(u32) -> u32 {
     #[cfg(target_arch = "x86_64")]
     {
@@ -25,7 +30,22 @@ fn select_popcount_u32() -> fn(u32) -> u32 {
     popcount_u32_scalar
 }
 
+fn select_popcount_u64() -> fn(u64) -> u32 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::arch::is_x86_feature_detected!("popcnt") {
+            return popcount_u64_x86_popcnt;
+        }
+    }
+
+    popcount_u64_scalar
+}
+
 fn popcount_u32_scalar(x: u32) -> u32 {
+    x.count_ones()
+}
+
+fn popcount_u64_scalar(x: u64) -> u32 {
     x.count_ones()
 }
 
@@ -36,10 +56,23 @@ fn popcount_u32_x86_popcnt(x: u32) -> u32 {
 }
 
 #[cfg(target_arch = "x86_64")]
+fn popcount_u64_x86_popcnt(x: u64) -> u32 {
+    // Safety: selected only when the host CPU reports POPCNT.
+    unsafe { popcount_u64_x86_popcnt_inner(x) }
+}
+
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "popcnt")]
 unsafe fn popcount_u32_x86_popcnt_inner(x: u32) -> u32 {
     // `_popcnt32` takes i32 but counts bits in the low 32.
-    unsafe { core::arch::x86_64::_popcnt32(x as i32) as u32 }
+    core::arch::x86_64::_popcnt32(x as i32) as u32
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "popcnt")]
+unsafe fn popcount_u64_x86_popcnt_inner(x: u64) -> u32 {
+    // `_popcnt64` takes i64 but counts bits in the full 64-bit value.
+    core::arch::x86_64::_popcnt64(x as i64) as u32
 }
 
 /// Sum popcounts over a slice. This is useful for “count bits in many masks”.
@@ -105,6 +138,21 @@ mod tests {
     fn popcount_u32_matches_scalar() {
         for x in [0u32, 1, 2, 3, 0xFFFF_FFFF, 0x8000_0000, 0x00FF_00FF] {
             assert_eq!(popcount_u32(x), x.count_ones());
+        }
+    }
+
+    #[test]
+    fn popcount_u64_matches_scalar() {
+        for x in [
+            0u64,
+            1,
+            2,
+            3,
+            0xFFFF_FFFF_FFFF_FFFF,
+            0x8000_0000_0000_0000,
+            0x00FF_00FF_00FF_00FF,
+        ] {
+            assert_eq!(popcount_u64(x), x.count_ones());
         }
     }
 

@@ -22,8 +22,22 @@ macro_rules! trace {
 
 /// Upper bound on enumerated satisfying tuples per cage for SAT allowlist encoding.
 ///
-/// If a cage exceeds this threshold, SAT encoding is considered too large for the current strategy
-/// and callers should fall back to non-SAT verification paths (or future encodings).
+/// Chosen as 512 based on the following considerations:
+///
+/// - **Clause count scaling**: For T tuples in a k-cell cage, we need T selector vars,
+///   2*k*T implication clauses, and T*(T-1)/2 at-most-one clauses. At T=512 with k=4,
+///   this is ~135k clauses per cage.
+///
+/// - **Practical bounds**: For N<=9 and cages<=6 cells, typical tuple counts are:
+///   - 2-cell Add: max 8 tuples
+///   - 3-cell Add: max ~80 tuples
+///   - 4-cell Add: hundreds (near threshold)
+///   - 5+ cell Mul: may exceed threshold
+///
+/// - **Fallback cost**: When exceeded, `count_solutions_up_to(..., limit=2)` is used,
+///   which is fast for small puzzles where tuple explosion is unlikely anyway.
+///
+/// See `docs/sat_cage_encoding.md` section 3.4 for detailed justification.
 pub const SAT_TUPLE_THRESHOLD: usize = 512;
 
 fn add_eq_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cage: &Cage) -> bool {

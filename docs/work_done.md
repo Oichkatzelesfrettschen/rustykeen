@@ -1,11 +1,14 @@
 # Work done (audit snapshot)
 
-This document is a “what exists today” counterbalance to `docs/plan.md` (what we’re building toward).
+This document is a "what exists today" counterbalance to `docs/plan.md` (what we're building toward).
+
+Last updated: 2026-01-01
 
 ## Toolchain / CI
-- Toolchain pinned: `rust-toolchain.toml` (`nightly-2025-01-01`)
+- Toolchain pinned: `rust-toolchain.toml` (`nightly-2026-01-01`)
 - CI aligned to the pinned nightly: `.github/workflows/ci.yml`
 - CI gates: `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`, `cargo test --all-targets`
+- Fuzz harness: `fuzz/` with `fuzz_sgt_desc_parser` and `fuzz_solver` targets (cargo-fuzz)
 
 ## Workspace crates (implemented)
 
@@ -24,6 +27,11 @@ This document is a “what exists today” counterbalance to `docs/plan.md` (wha
 ### `kenken-solver`
 - Deterministic backtracking solver + solution counting up to a limit (`kenken-solver/src/solver.rs`)
 - Deduction tiers (`DeductionTier`) for propagation strength vs search
+- Difficulty classification:
+  - `TierRequiredResult` and `classify_tier_required()`: determine minimum deduction tier needed
+  - `classify_difficulty_from_tier()`: primary difficulty classification matching upstream behavior
+  - `SolveStats.backtracked`: tracks whether guessing was required
+  - Calibration corpus: `kenken-solver/tests/corpus_difficulty.rs`
 - Optional performance/certification modules:
   - `alloc-bumpalo`: bump allocation scratch buffers for propagation
   - `solver-dlx`: Latin exact-cover utilities via `dlx-rs` (`kenken-solver/src/dlx_latin.rs`)
@@ -68,8 +76,15 @@ This document is a “what exists today” counterbalance to `docs/plan.md` (wha
 - Upstream distillation notes (no code copied): `docs/upstream_sgt_puzzles_keen.md`
 - Dependency audit tooling + distilled docs: `scripts/` and `docs/deps/*.md`
 
+## Testing infrastructure
+- Criterion benchmarks: `kenken-solver/benches/solver_smoke.rs` (solve_one, count_solutions, deduction tiers)
+- Proptest property tests: `kenken-core/tests/prop_cage_semantics.rs` (cage arithmetic invariants)
+- Golden corpus tests: `kenken-solver/tests/corpus_sgt_desc.rs` (2x2, 3x3, 4x4 puzzles with known solution counts)
+- Difficulty calibration tests: `kenken-solver/tests/corpus_difficulty.rs` (tier-required classification validation)
+- Fuzz targets: `fuzz/fuzz_targets/` (parser and solver coverage)
+
 ## Major lacunae (next engineering milestones)
 - SAT encoding for full cage arithmetic constraints (not just Latin) and uniqueness proofs that incorporate cages.
-- Generator pipeline hardening (minimization + difficulty scoring + calibration corpus).
-- Difficulty rubric calibration + benchmark suite (`criterion`) + property testing (`proptest`/`bolero`).
+- Generator pipeline hardening (minimization + difficulty scoring + expanded calibration corpus).
+- Expand difficulty calibration corpus with more diverse puzzles (Normal/Hard tier requirements).
 - Stable public API policy (semver, feature gates, versioned snapshot evolution) and compatibility tests at scale.

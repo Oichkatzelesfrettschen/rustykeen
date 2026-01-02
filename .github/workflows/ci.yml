@@ -9,12 +9,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly-2025-01-01
+      - uses: dtolnay/rust-toolchain@nightly-2026-01-01
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, llvm-tools
       - name: Format
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --all-targets
+
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly-2026-01-01
+      - name: Install Z3
+        run: sudo apt-get update && sudo apt-get install -y z3 libz3-dev
+      - name: Z3 Verification (optional)
+        run: cargo test --test z3_golden_verify --features verify -- --ignored --nocapture
+        continue-on-error: true

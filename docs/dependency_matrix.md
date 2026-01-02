@@ -6,7 +6,7 @@ This document maps the audited dependency list to:
 - adoption status (now vs planned)
 
 See also:
-- `docs/crate_audit_list.md` (canonical list)
+- `docs/crates_audit.md` (single source of truth for crate selection)
 - `docs/deps/README.md` (per-crate summaries)
 - `docs/features.md` (current workspace feature strategy)
 
@@ -48,10 +48,10 @@ Legend:
 - `tracing` → structured spans/events → feature `telemetry-tracing` → status `now` (in solver, optional)
 - `tracing-subscriber` → route tracing output → feature `telemetry-subscriber` → status `now` (installed by `kenken-cli` for out-of-box visibility)
 - `tracing-tracy` → tracy profiler integration → feature `telemetry-tracy` → status `planned`
-- `criterion` → statistical benchmarks → feature `bench-criterion` → status `planned`
+- `criterion` → statistical benchmarks → feature `bench-criterion` → status `now` (solver_smoke.rs benchmarks)
 - `ratatui` → developer TUI dashboard → feature `dev-tui` → status `planned`
 - `varisat` → SAT uniqueness proofs (optional) → feature `sat-varisat` → status `now` (Latin + staged cage allowlist encoding; tuple-thresholded)
 - `z3` → SMT proofs (optional) → feature `smt-z3` → status `planned`
 - `kani` → model checking harnesses → feature `verify-kani` → status `planned`
-- `proptest` / `bolero` → fuzz/property testing → feature `fuzz` → status `planned`
+- `proptest` / `bolero` → fuzz/property testing → feature `fuzz` → status `now` (proptest in kenken-core tests; bolero planned)
 - `nom` → legacy corpus parsing → feature `io-nom` → status `planned`

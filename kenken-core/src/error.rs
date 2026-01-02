@@ -2,7 +2,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
-    #[error("grid size N must be between 1 and 16 (got {0})")]
+    #[error("grid size N={0} not supported by this configuration")]
     InvalidGridSize(u8),
 
     #[error("cage has no cells")]

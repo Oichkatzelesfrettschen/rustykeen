@@ -1,0 +1,33 @@
+[package]
+name = "kenken-verify"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+kenken-core = { path = "../kenken-core" }
+kenken-solver = { path = "../kenken-solver" }
+thiserror.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+criterion = { workspace = true, features = ["html_reports"] }
+
+[[bin]]
+name = "extract_verify"
+path = "src/extract_verify.rs"
+required-features = []
+
+[lib]
+name = "kenken_verify"
+path = "src/lib.rs"
+
+[features]
+default = []
+verify-z3 = []
+verify-sat = []
+verify-tla = []

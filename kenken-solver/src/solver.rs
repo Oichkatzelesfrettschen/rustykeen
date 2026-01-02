@@ -14,10 +14,15 @@ use kenken_core::rules::{Op, Ruleset};
 use kenken_core::{Cage, CoreError, Puzzle};
 
 #[cfg(feature = "tracing")]
-use tracing::trace;
+use tracing::{instrument, trace};
 
 #[cfg(not(feature = "tracing"))]
 macro_rules! trace {
+    ($($tt:tt)*) => {};
+}
+
+#[cfg(not(feature = "tracing"))]
+macro_rules! instrument {
     ($($tt:tt)*) => {};
 }
 
@@ -35,11 +40,13 @@ use bumpalo::Bump;
 use crate::error::SolveError;
 
 #[cfg(feature = "simd-dispatch")]
+#[allow(dead_code)]
 fn popcount_u32(x: u32) -> u32 {
     kenken_simd::popcount_u32(x)
 }
 
 #[cfg(not(feature = "simd-dispatch"))]
+#[allow(dead_code)]
 fn popcount_u32(x: u32) -> u32 {
     x.count_ones()
 }
@@ -55,6 +62,9 @@ pub struct SolveStats {
     pub nodes_visited: u64,
     pub assignments: u64,
     pub max_depth: u32,
+    /// True if the solver tried multiple values at any cell (branched/guessed).
+    /// When false, deductions alone determined all cell values.
+    pub backtracked: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +85,7 @@ pub enum DeductionTier {
 }
 
 /// Solve and return the first solution (if any).
+#[instrument(skip(puzzle, rules), fields(n = puzzle.n, cages = puzzle.cages.len()))]
 pub fn solve_one(puzzle: &Puzzle, rules: Ruleset) -> Result<Option<Solution>, SolveError> {
     let mut first = None;
     let count = search(puzzle, rules, 1, &mut first)?;
@@ -93,6 +104,7 @@ pub fn solve_one_with_stats(
 }
 
 /// Solve with a selectable deduction tier (propagation strength).
+#[instrument(skip(puzzle, rules), fields(n = puzzle.n, cages = puzzle.cages.len(), tier = ?tier))]
 pub fn solve_one_with_deductions(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -105,6 +117,7 @@ pub fn solve_one_with_deductions(
 }
 
 /// Count solutions up to `limit` (use `2` to check uniqueness).
+#[instrument(skip(puzzle, rules), fields(n = puzzle.n, limit))]
 pub fn count_solutions_up_to(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -164,8 +177,8 @@ fn search_with_stats(
     let mut state = State {
         n: puzzle.n,
         grid: vec![0; a],
-        row_mask: vec![0u32; n],
-        col_mask: vec![0u32; n],
+        row_mask: vec![0u64; n],
+        col_mask: vec![0u64; n],
         cage_of_cell,
     };
 
@@ -199,8 +212,8 @@ fn search_with_stats_deducing(
     let mut state = State {
         n: puzzle.n,
         grid: vec![0; a],
-        row_mask: vec![0u32; n],
-        col_mask: vec![0u32; n],
+        row_mask: vec![0u64; n],
+        col_mask: vec![0u64; n],
         cage_of_cell,
     };
 
@@ -219,12 +232,13 @@ fn search_with_stats_deducing(
 struct State {
     n: u8,
     grid: Vec<u8>,
-    row_mask: Vec<u32>,
-    col_mask: Vec<u32>,
+    row_mask: Vec<u64>,  // Extended to u64 to support n <= 63
+    col_mask: Vec<u64>,  // Extended to u64 to support n <= 63
     cage_of_cell: Vec<usize>,
 }
 
 #[allow(clippy::too_many_arguments)]
+#[instrument(skip(puzzle, rules, first, state, count, stats), fields(depth, n = state.n), level = "debug")]
 fn backtrack(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -258,11 +272,17 @@ fn backtrack(
     let col = cell_idx % (state.n as usize);
 
     let mut mask = domain;
+    let mut tried = 0u32;
     while mask != 0 {
         let d = mask.trailing_zeros() as u8;
         mask &= mask - 1;
         if d == 0 {
             continue;
+        }
+
+        tried += 1;
+        if tried > 1 {
+            stats.backtracked = true;
         }
 
         trace!(cell = cell_idx, digit = d, "try");
@@ -282,6 +302,7 @@ fn backtrack(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[instrument(skip(puzzle, rules, first, state, count, stats), fields(depth, tier = ?tier), level = "debug")]
 fn backtrack_deducing(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -315,11 +336,17 @@ fn backtrack_deducing(
     let col = cell_idx % (state.n as usize);
 
     let mut mask = domain;
+    let mut tried = 0u32;
     while mask != 0 {
         let d = mask.trailing_zeros() as u8;
         mask &= mask - 1;
         if d == 0 {
             continue;
+        }
+
+        tried += 1;
+        if tried > 1 {
+            stats.backtracked = true;
         }
 
         place(state, row, col, d);
@@ -363,9 +390,107 @@ fn backtrack_deducing(
     Ok(())
 }
 
+/// Result of tier-required classification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TierRequiredResult {
+    /// Minimum deduction tier needed to solve without guessing.
+    /// `None` means guessing (backtracking) was required.
+    pub tier_required: Option<DeductionTier>,
+    /// Search statistics from the successful solve attempt.
+    pub stats: SolveStats,
+}
+
+/// Determine the minimum deduction tier required to solve the puzzle.
+///
+/// Tries solving at progressively stronger deduction tiers until success
+/// without backtracking. This is the primary difficulty signal matching
+/// upstream sgt-puzzles behavior.
+///
+/// Returns the minimum tier where the puzzle was solvable using only
+/// deductions (no guessing). If even Hard tier requires guessing,
+/// `tier_required` is `None`.
+#[instrument(skip(puzzle, rules), fields(n = puzzle.n))]
+pub fn classify_tier_required(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<TierRequiredResult, SolveError> {
+    // Try tiers in order: Easy -> Normal -> Hard
+    for tier in [
+        DeductionTier::Easy,
+        DeductionTier::Normal,
+        DeductionTier::Hard,
+    ] {
+        let mut first = None;
+        let mut stats = SolveStats::default();
+        let count = search_with_stats_deducing(puzzle, rules, tier, 1, &mut first, &mut stats)?;
+
+        if count > 0 && !stats.backtracked {
+            return Ok(TierRequiredResult {
+                tier_required: Some(tier),
+                stats,
+            });
+        }
+    }
+
+    // Even Hard tier required backtracking; solve with full search
+    let mut first = None;
+    let mut stats = SolveStats::default();
+    let _ = search_with_stats_deducing(
+        puzzle,
+        rules,
+        DeductionTier::Hard,
+        1,
+        &mut first,
+        &mut stats,
+    )?;
+
+    Ok(TierRequiredResult {
+        tier_required: None,
+        stats,
+    })
+}
+
+/// Classify difficulty from a tier-required result.
+///
+/// This is the **primary difficulty classification** matching upstream behavior.
+/// Difficulty is determined by which deduction tier was required:
+/// - Easy tier sufficient -> Easy
+/// - Normal tier sufficient -> Normal
+/// - Hard tier sufficient -> Hard
+/// - Guessing required -> Extreme or Unreasonable based on search cost
+pub fn classify_difficulty_from_tier(result: TierRequiredResult) -> DifficultyTier {
+    match result.tier_required {
+        Some(DeductionTier::Easy) => DifficultyTier::Easy,
+        Some(DeductionTier::Normal) => DifficultyTier::Normal,
+        Some(DeductionTier::Hard) => DifficultyTier::Hard,
+        Some(DeductionTier::None) => {
+            // Shouldn't happen (None tier means no deductions), treat as backtracking
+            classify_difficulty_from_stats(result.stats)
+        }
+        None => {
+            // Required backtracking; use search cost for Extreme vs Unreasonable
+            if result.stats.nodes_visited <= 50_000 {
+                DifficultyTier::Extreme
+            } else {
+                DifficultyTier::Unreasonable
+            }
+        }
+    }
+}
+
+/// Legacy difficulty classification from solve statistics alone.
+///
+/// **Deprecated**: Use `classify_tier_required` + `classify_difficulty_from_tier` instead.
+/// This is retained for backwards compatibility and for cases where only stats are available.
 pub fn classify_difficulty(stats: SolveStats) -> DifficultyTier {
-    // Provisional rubric: upstream parity requires a deduction-tiered solver.
-    // This is only a placeholder so we can build corpora and regressions early.
+    classify_difficulty_from_stats(stats)
+}
+
+/// Classify difficulty from solve statistics (search cost).
+///
+/// This is a fallback for puzzles that require backtracking.
+/// The thresholds are approximate and may need calibration.
+fn classify_difficulty_from_stats(stats: SolveStats) -> DifficultyTier {
     match stats.assignments {
         0..=200 => DifficultyTier::Easy,
         201..=2_000 => DifficultyTier::Normal,
@@ -375,10 +500,11 @@ pub fn classify_difficulty(stats: SolveStats) -> DifficultyTier {
     }
 }
 
-fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u32)>, SolveError> {
+#[instrument(skip(puzzle, state), fields(n = state.n, mrv_count = 0), level = "debug")]
+fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u64)>, SolveError> {
     let n = state.n as usize;
     let a = n * n;
-    let mut best: Option<(usize, u32, u32)> = None; // (idx, domain, popcnt)
+    let mut best: Option<(usize, u64, u32)> = None; // (idx, domain, popcnt)
 
     for idx in 0..a {
         if state.grid[idx] != 0 {
@@ -387,7 +513,7 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u32)
         let row = idx / n;
         let col = idx % n;
         let dom = domain_for_cell(puzzle, state, idx, row, col)?;
-        let pop = popcount_u32(dom);
+        let pop = popcount_u64(dom);
         if pop == 0 {
             return Ok(None);
         }
@@ -404,13 +530,17 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &State) -> Result<Option<(usize, u32)
     Ok(best.map(|(idx, dom, _)| (idx, dom)))
 }
 
+fn popcount_u64(x: u64) -> u32 {
+    x.count_ones()
+}
+
 fn domain_for_cell(
     puzzle: &Puzzle,
     state: &State,
     idx: usize,
     row: usize,
     col: usize,
-) -> Result<u32, CoreError> {
+) -> Result<u64, CoreError> {
     let n = state.n;
     let mut dom = full_domain(n) & !state.row_mask[row] & !state.col_mask[col];
 
@@ -419,7 +549,7 @@ fn domain_for_cell(
         if cage.target <= 0 || cage.target > n as i32 {
             return Err(CoreError::EqTargetOutOfRange);
         }
-        dom &= 1u32 << (cage.target as u32);
+        dom &= 1u64 << (cage.target as u32);
     }
 
     Ok(dom)
@@ -439,6 +569,7 @@ fn cages_still_feasible(
     Ok(true)
 }
 
+#[instrument(skip(puzzle, rules, state, forced), fields(n = state.n, tier = ?tier, iterations = 0), level = "debug")]
 fn propagate(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -452,16 +583,16 @@ fn propagate(
     #[cfg(feature = "alloc-bumpalo")]
     let mut bump = Bump::new();
 
-    let mut domains = vec![0u32; a];
+    let mut domains = vec![0u64; a];
 
     loop {
         #[cfg(feature = "alloc-bumpalo")]
         bump.reset();
 
-        domains.fill(0u32);
+        domains.fill(0u64);
         for (idx, dom_slot) in domains.iter_mut().enumerate() {
             if state.grid[idx] != 0 {
-                *dom_slot = 1u32 << (state.grid[idx] as u32);
+                *dom_slot = 1u64 << (state.grid[idx] as u32);
                 continue;
             }
             let r = idx / n;
@@ -488,7 +619,7 @@ fn propagate(
             if state.grid[idx] != 0 {
                 continue;
             }
-            if popcount_u32(dom) == 1 {
+            if popcount_u64(dom) == 1 {
                 let val = dom.trailing_zeros() as u8;
                 let r = idx / n;
                 let c = idx % n;
@@ -505,13 +636,14 @@ fn propagate(
 }
 
 #[cfg(not(feature = "alloc-bumpalo"))]
+#[instrument(skip(_puzzle, rules, state, cage, domains), fields(op = ?cage.op, cells = cage.cells.len()), level = "debug")]
 fn apply_cage_deduction(
     _puzzle: &Puzzle,
     rules: Ruleset,
     state: &State,
     cage: &Cage,
     tier: DeductionTier,
-    domains: &mut [u32],
+    domains: &mut [u64],
 ) -> Result<(), SolveError> {
     let n = state.n as usize;
     let a = n * n;
@@ -520,7 +652,7 @@ fn apply_cage_deduction(
     match cage.op {
         Op::Eq => {
             let idx = cells[0];
-            domains[idx] &= 1u32 << (cage.target as u32);
+            domains[idx] &= 1u64 << (cage.target as u32);
             return Ok(());
         }
         Op::Sub | Op::Div if rules.sub_div_two_cell_only && cage.cells.len() != 2 => {
@@ -531,11 +663,11 @@ fn apply_cage_deduction(
             let b_idx = cells[1];
             let a_dom = domains[a_idx];
             let b_dom = domains[b_idx];
-            let mut a_ok = 0u32;
-            let mut b_ok = 0u32;
+            let mut a_ok = 0u64;
+            let mut b_ok = 0u64;
             let mut found = false;
-            let mut must_row: Vec<Option<u32>> = vec![None; n];
-            let mut must_col: Vec<Option<u32>> = vec![None; n];
+            let mut must_row: Vec<Option<u64>> = vec![None; n];
+            let mut must_col: Vec<Option<u64>> = vec![None; n];
             let coords = [(a_idx / n, a_idx % n), (b_idx / n, b_idx % n)];
             for av in domain_iter(a_dom) {
                 for bv in domain_iter(b_dom) {
@@ -549,16 +681,16 @@ fn apply_cage_deduction(
                     };
                     if ok {
                         found = true;
-                        a_ok |= 1u32 << (av as u32);
-                        b_ok |= 1u32 << (bv as u32);
+                        a_ok |= 1u64 << (av as u32);
+                        b_ok |= 1u64 << (bv as u32);
 
                         if tier == DeductionTier::Hard {
                             let pair = [av, bv];
-                            let mut row_bits = vec![0u32; n];
-                            let mut col_bits = vec![0u32; n];
+                            let mut row_bits = vec![0u64; n];
+                            let mut col_bits = vec![0u64; n];
                             for (i, &(r, c)) in coords.iter().enumerate() {
-                                row_bits[r] |= 1u32 << (pair[i] as u32);
-                                col_bits[c] |= 1u32 << (pair[i] as u32);
+                                row_bits[r] |= 1u64 << (pair[i] as u32);
+                                col_bits[c] |= 1u64 << (pair[i] as u32);
                             }
                             for r in 0..n {
                                 if row_bits[r] != 0 {
@@ -613,8 +745,8 @@ fn apply_cage_deduction(
             let (per_pos, any_mask, must_row, must_col, found) = if tier == DeductionTier::Hard {
                 enumerate_cage_tuples_with_must(n, cage, &cells, &coords, domains)
             } else {
-                let mut per_pos = vec![0u32; cells.len()];
-                let mut any_mask = 0u32;
+                let mut per_pos = vec![0u64; cells.len()];
+                let mut any_mask = 0u64;
                 enumerate_cage_tuples(
                     cage,
                     &cells,
@@ -628,8 +760,8 @@ fn apply_cage_deduction(
                 (
                     per_pos,
                     any_mask,
-                    vec![0u32; n],
-                    vec![0u32; n],
+                    vec![0u64; n],
+                    vec![0u64; n],
                     any_mask != 0,
                 )
             };
@@ -681,6 +813,7 @@ fn apply_cage_deduction(
 }
 
 #[cfg(feature = "alloc-bumpalo")]
+#[instrument(skip(bump, _puzzle, rules, state, cage, domains), fields(op = ?cage.op, cells = cage.cells.len()), level = "debug")]
 fn apply_cage_deduction_with_bump(
     bump: &Bump,
     _puzzle: &Puzzle,
@@ -688,7 +821,7 @@ fn apply_cage_deduction_with_bump(
     state: &State,
     cage: &Cage,
     tier: DeductionTier,
-    domains: &mut [u32],
+    domains: &mut [u64],
 ) -> Result<(), SolveError> {
     // Use bump-allocated temporary vectors to reduce per-iteration heap churn in propagation.
     let n = state.n as usize;
@@ -701,7 +834,7 @@ fn apply_cage_deduction_with_bump(
     match cage.op {
         Op::Eq => {
             let idx = cells[0];
-            domains[idx] &= 1u32 << (cage.target as u32);
+            domains[idx] &= 1u64 << (cage.target as u32);
             return Ok(());
         }
         Op::Sub | Op::Div if rules.sub_div_two_cell_only && cage.cells.len() != 2 => {
@@ -713,12 +846,12 @@ fn apply_cage_deduction_with_bump(
             let b_idx = cells[1];
             let a_dom = domains[a_idx];
             let b_dom = domains[b_idx];
-            let mut a_ok = 0u32;
-            let mut b_ok = 0u32;
+            let mut a_ok = 0u64;
+            let mut b_ok = 0u64;
             let mut found = false;
-            let mut must_row: bumpalo::collections::Vec<Option<u32>> =
+            let mut must_row: bumpalo::collections::Vec<Option<u64>> =
                 bumpalo::collections::Vec::with_capacity_in(n, bump);
-            let mut must_col: bumpalo::collections::Vec<Option<u32>> =
+            let mut must_col: bumpalo::collections::Vec<Option<u64>> =
                 bumpalo::collections::Vec::with_capacity_in(n, bump);
             must_row.resize(n, None);
             must_col.resize(n, None);
@@ -735,14 +868,14 @@ fn apply_cage_deduction_with_bump(
                     };
                     if ok {
                         found = true;
-                        a_ok |= 1u32 << (av as u32);
-                        b_ok |= 1u32 << (bv as u32);
+                        a_ok |= 1u64 << (av as u32);
+                        b_ok |= 1u64 << (bv as u32);
 
                         if tier == DeductionTier::Hard {
                             let (ra, ca) = coords[0];
                             let (rb, cb) = coords[1];
-                            let a_bit = 1u32 << (av as u32);
-                            let b_bit = 1u32 << (bv as u32);
+                            let a_bit = 1u64 << (av as u32);
+                            let b_bit = 1u64 << (bv as u32);
 
                             if ra == rb {
                                 let bits = a_bit | b_bit;
@@ -815,11 +948,11 @@ fn apply_cage_deduction_with_bump(
 
             if tier == DeductionTier::Hard {
                 let mut per_pos = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
-                per_pos.resize(cells.len(), 0u32);
-                let mut any_mask = 0u32;
-                let mut must_row: bumpalo::collections::Vec<Option<u32>> =
+                per_pos.resize(cells.len(), 0u64);
+                let mut any_mask = 0u64;
+                let mut must_row: bumpalo::collections::Vec<Option<u64>> =
                     bumpalo::collections::Vec::with_capacity_in(n, bump);
-                let mut must_col: bumpalo::collections::Vec<Option<u32>> =
+                let mut must_col: bumpalo::collections::Vec<Option<u64>> =
                     bumpalo::collections::Vec::with_capacity_in(n, bump);
                 must_row.resize(n, None);
                 must_col.resize(n, None);
@@ -828,8 +961,8 @@ fn apply_cage_deduction_with_bump(
                 let mut chosen = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
                 let mut row_bits = bumpalo::collections::Vec::with_capacity_in(n, bump);
                 let mut col_bits = bumpalo::collections::Vec::with_capacity_in(n, bump);
-                row_bits.resize(n, 0u32);
-                col_bits.resize(n, 0u32);
+                row_bits.resize(n, 0u64);
+                col_bits.resize(n, 0u64);
 
                 enumerate_cage_tuples_collect_bump(
                     n,
@@ -890,8 +1023,8 @@ fn apply_cage_deduction_with_bump(
 
             // Easy/Normal tier: no "must" elimination needed.
             let mut per_pos = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
-            per_pos.resize(cells.len(), 0u32);
-            let mut any_mask = 0u32;
+            per_pos.resize(cells.len(), 0u64);
+            let mut any_mask = 0u64;
             let mut chosen = bumpalo::collections::Vec::with_capacity_in(cells.len(), bump);
             enumerate_cage_tuples_bump(
                 cage,
@@ -928,17 +1061,17 @@ fn enumerate_cage_tuples_bump(
     cage: &Cage,
     cells: &[usize],
     coords: &[(usize, usize)],
-    domains: &[u32],
+    domains: &[u64],
     pos: usize,
     chosen: &mut bumpalo::collections::Vec<u8>,
-    per_pos: &mut [u32],
-    any_mask: &mut u32,
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
 ) {
     if pos == cells.len() {
         if cage_tuple_satisfies(cage, chosen) {
             for (i, &v) in chosen.iter().enumerate() {
-                per_pos[i] |= 1u32 << (v as u32);
-                *any_mask |= 1u32 << (v as u32);
+                per_pos[i] |= 1u64 << (v as u32);
+                *any_mask |= 1u64 << (v as u32);
             }
         }
         return;
@@ -1006,30 +1139,30 @@ fn enumerate_cage_tuples_collect_bump(
     cage: &Cage,
     cells: &[usize],
     coords: &[(usize, usize)],
-    domains: &[u32],
+    domains: &[u64],
     pos: usize,
     chosen: &mut bumpalo::collections::Vec<u8>,
-    per_pos: &mut [u32],
-    any_mask: &mut u32,
-    must_row: &mut [Option<u32>],
-    must_col: &mut [Option<u32>],
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
+    must_row: &mut [Option<u64>],
+    must_col: &mut [Option<u64>],
     found: &mut bool,
-    row_bits: &mut [u32],
-    col_bits: &mut [u32],
+    row_bits: &mut [u64],
+    col_bits: &mut [u64],
 ) {
     if pos == cells.len() {
         if cage_tuple_satisfies(cage, chosen) {
             *found = true;
             for (i, &v) in chosen.iter().enumerate() {
-                per_pos[i] |= 1u32 << (v as u32);
-                *any_mask |= 1u32 << (v as u32);
+                per_pos[i] |= 1u64 << (v as u32);
+                *any_mask |= 1u64 << (v as u32);
             }
 
-            row_bits.fill(0u32);
-            col_bits.fill(0u32);
+            row_bits.fill(0u64);
+            col_bits.fill(0u64);
             for (i, &(r, c)) in coords.iter().enumerate() {
-                row_bits[r] |= 1u32 << (chosen[i] as u32);
-                col_bits[c] |= 1u32 << (chosen[i] as u32);
+                row_bits[r] |= 1u64 << (chosen[i] as u32);
+                col_bits[c] |= 1u64 << (chosen[i] as u32);
             }
             for r in 0..n {
                 if row_bits[r] != 0 {
@@ -1126,21 +1259,22 @@ fn enumerate_cage_tuples_collect_bump(
 
 #[cfg(not(feature = "alloc-bumpalo"))]
 #[allow(clippy::too_many_arguments)]
+#[instrument(skip(cage, cells, coords, domains, chosen, per_pos, any_mask), fields(op = ?cage.op, pos, cells_len = cells.len()), level = "debug")]
 fn enumerate_cage_tuples(
     cage: &Cage,
     cells: &[usize],
     coords: &[(usize, usize)],
-    domains: &[u32],
+    domains: &[u64],
     pos: usize,
     chosen: &mut Vec<u8>,
-    per_pos: &mut [u32],
-    any_mask: &mut u32,
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
 ) {
     if pos == cells.len() {
         if cage_tuple_satisfies(cage, chosen) {
             for (i, &v) in chosen.iter().enumerate() {
-                per_pos[i] |= 1u32 << (v as u32);
-                *any_mask |= 1u32 << (v as u32);
+                per_pos[i] |= 1u64 << (v as u32);
+                *any_mask |= 1u64 << (v as u32);
             }
         }
         return;
@@ -1207,12 +1341,12 @@ fn enumerate_cage_tuples_with_must(
     cage: &Cage,
     cells: &[usize],
     coords: &[(usize, usize)],
-    domains: &[u32],
-) -> (Vec<u32>, u32, Vec<u32>, Vec<u32>, bool) {
-    let mut per_pos = vec![0u32; cells.len()];
-    let mut any_mask = 0u32;
-    let mut must_row: Vec<Option<u32>> = vec![None; n];
-    let mut must_col: Vec<Option<u32>> = vec![None; n];
+    domains: &[u64],
+) -> (Vec<u64>, u64, Vec<u64>, Vec<u64>, bool) {
+    let mut per_pos = vec![0u64; cells.len()];
+    let mut any_mask = 0u64;
+    let mut must_row: Vec<Option<u64>> = vec![None; n];
+    let mut must_col: Vec<Option<u64>> = vec![None; n];
     let mut found = false;
 
     enumerate_cage_tuples_collect(
@@ -1237,33 +1371,34 @@ fn enumerate_cage_tuples_with_must(
 
 #[cfg(not(feature = "alloc-bumpalo"))]
 #[allow(clippy::too_many_arguments)]
+#[instrument(skip(cage, cells, coords, domains, chosen, per_pos, any_mask, must_row, must_col, found), fields(op = ?cage.op, pos, cells_len = cells.len()), level = "debug")]
 fn enumerate_cage_tuples_collect(
     n: usize,
     cage: &Cage,
     cells: &[usize],
     coords: &[(usize, usize)],
-    domains: &[u32],
+    domains: &[u64],
     pos: usize,
     chosen: &mut Vec<u8>,
-    per_pos: &mut [u32],
-    any_mask: &mut u32,
-    must_row: &mut [Option<u32>],
-    must_col: &mut [Option<u32>],
+    per_pos: &mut [u64],
+    any_mask: &mut u64,
+    must_row: &mut [Option<u64>],
+    must_col: &mut [Option<u64>],
     found: &mut bool,
 ) {
     if pos == cells.len() {
         if cage_tuple_satisfies(cage, chosen) {
             *found = true;
             for (i, &v) in chosen.iter().enumerate() {
-                per_pos[i] |= 1u32 << (v as u32);
-                *any_mask |= 1u32 << (v as u32);
+                per_pos[i] |= 1u64 << (v as u32);
+                *any_mask |= 1u64 << (v as u32);
             }
 
-            let mut row_bits = vec![0u32; n];
-            let mut col_bits = vec![0u32; n];
+            let mut row_bits = vec![0u64; n];
+            let mut col_bits = vec![0u64; n];
             for (i, &(r, c)) in coords.iter().enumerate() {
-                row_bits[r] |= 1u32 << (chosen[i] as u32);
-                col_bits[c] |= 1u32 << (chosen[i] as u32);
+                row_bits[r] |= 1u64 << (chosen[i] as u32);
+                col_bits[c] |= 1u64 << (chosen[i] as u32);
             }
             for r in 0..n {
                 if row_bits[r] != 0 {
@@ -1371,6 +1506,7 @@ fn violates_in_cage_rowcol(coords: &[(usize, usize)], chosen: &[u8], pos: usize,
     false
 }
 
+#[instrument(skip(puzzle, rules, state, cage), fields(op = ?cage.op, cells = cage.cells.len()), level = "debug")]
 fn cage_feasible(
     puzzle: &Puzzle,
     rules: Ruleset,
@@ -1564,36 +1700,36 @@ fn two_cell_div_feasible(
 fn place(state: &mut State, row: usize, col: usize, d: u8) {
     let idx = row * (state.n as usize) + col;
     state.grid[idx] = d;
-    state.row_mask[row] |= 1u32 << (d as u32);
-    state.col_mask[col] |= 1u32 << (d as u32);
+    state.row_mask[row] |= 1u64 << (d as u32);
+    state.col_mask[col] |= 1u64 << (d as u32);
 }
 
 fn unplace(state: &mut State, row: usize, col: usize, d: u8) {
     let idx = row * (state.n as usize) + col;
     state.grid[idx] = 0;
-    state.row_mask[row] &= !(1u32 << (d as u32));
-    state.col_mask[col] &= !(1u32 << (d as u32));
+    state.row_mask[row] &= !(1u64 << (d as u32));
+    state.col_mask[col] &= !(1u64 << (d as u32));
 }
 
-fn full_domain(n: u8) -> u32 {
+fn full_domain(n: u8) -> u64 {
     // bits 1..=n set
-    if n >= 31 {
-        u32::MAX
+    if n >= 63 {
+        u64::MAX
     } else {
-        ((1u32 << (n as u32 + 1)) - 1) & !1u32
+        ((1u64 << (n as u32 + 1)) - 1) & !1u64
     }
 }
 
-fn domain_min_max(dom: u32) -> Option<(u8, u8)> {
+fn domain_min_max(dom: u64) -> Option<(u8, u8)> {
     if dom == 0 {
         return None;
     }
     let min = dom.trailing_zeros() as u8;
-    let max = (31 - dom.leading_zeros()) as u8;
+    let max = (63 - dom.leading_zeros()) as u8;
     Some((min, max))
 }
 
-fn domain_iter(dom: u32) -> impl Iterator<Item = u8> {
+fn domain_iter(dom: u64) -> impl Iterator<Item = u8> {
     let mut mask = dom;
     core::iter::from_fn(move || {
         if mask == 0 {
@@ -1641,5 +1777,297 @@ mod tests {
             .unwrap();
         assert_eq!(sol.n, 2);
         assert_eq!(sol.grid.len(), 4);
+    }
+}
+
+/// Kani formal verification harnesses for Latin constraint invariants.
+///
+/// These proofs verify that the row_mask/col_mask representation correctly
+/// enforces Latin square constraints (no duplicate digits in rows or columns).
+#[cfg(kani)]
+mod kani_verification {
+    use super::*;
+
+    /// Proves full_domain(n) has exactly n bits set (bits 1..=n).
+    #[kani::proof]
+    fn full_domain_has_n_bits() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 1 && n <= 30);
+
+        let dom = full_domain(n);
+        let count = dom.count_ones();
+
+        kani::assert(count == n as u32, "full_domain should have exactly n bits");
+
+        // Verify bit 0 is never set (digits are 1-indexed)
+        kani::assert((dom & 1) == 0, "bit 0 should never be set");
+
+        // Verify all bits 1..=n are set
+        for d in 1..=n {
+            kani::assert((dom & (1u32 << d)) != 0, "bit d should be set");
+        }
+    }
+
+    /// Proves place() sets the digit bit in row_mask.
+    #[kani::proof]
+    fn place_sets_row_mask() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        place(&mut state, row, col, d);
+        let bit_after = state.row_mask[row] & (1u32 << d);
+
+        kani::assert(bit_after != 0, "place should set digit bit in row_mask");
+    }
+
+    /// Proves place() sets the digit bit in col_mask.
+    #[kani::proof]
+    fn place_sets_col_mask() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        place(&mut state, row, col, d);
+        let bit_after = state.col_mask[col] & (1u32 << d);
+
+        kani::assert(bit_after != 0, "place should set digit bit in col_mask");
+    }
+
+    /// Proves unplace() clears the digit bit in row_mask.
+    #[kani::proof]
+    fn unplace_clears_row_mask() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        // Place then unplace
+        place(&mut state, row, col, d);
+        unplace(&mut state, row, col, d);
+
+        let bit_after = state.row_mask[row] & (1u32 << d);
+        kani::assert(bit_after == 0, "unplace should clear digit bit in row_mask");
+    }
+
+    /// Proves unplace() clears the digit bit in col_mask.
+    #[kani::proof]
+    fn unplace_clears_col_mask() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        // Place then unplace
+        place(&mut state, row, col, d);
+        unplace(&mut state, row, col, d);
+
+        let bit_after = state.col_mask[col] & (1u32 << d);
+        kani::assert(bit_after == 0, "unplace should clear digit bit in col_mask");
+    }
+
+    /// Proves place/unplace roundtrip restores masks to original state.
+    #[kani::proof]
+    fn place_unplace_roundtrip() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        let row_before = state.row_mask[row];
+        let col_before = state.col_mask[col];
+        let grid_before = state.grid[row * (n as usize) + col];
+
+        place(&mut state, row, col, d);
+        unplace(&mut state, row, col, d);
+
+        kani::assert(
+            state.row_mask[row] == row_before,
+            "row_mask should be restored after roundtrip",
+        );
+        kani::assert(
+            state.col_mask[col] == col_before,
+            "col_mask should be restored after roundtrip",
+        );
+        kani::assert(
+            state.grid[row * (n as usize) + col] == grid_before,
+            "grid cell should be restored after roundtrip",
+        );
+    }
+
+    /// Proves domain computation excludes digits placed in the same row.
+    ///
+    /// Key Latin constraint: if digit d is placed in row r,
+    /// then domain for any other cell in row r must NOT include d.
+    #[kani::proof]
+    fn domain_excludes_placed_in_row() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col1: usize = kani::any();
+        let col2: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize);
+        kani::assume(col1 < n as usize && col2 < n as usize);
+        kani::assume(col1 != col2);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        // Place digit d at (row, col1)
+        place(&mut state, row, col1, d);
+
+        // Compute domain for cell (row, col2) - another cell in same row
+        let full = full_domain(n);
+        let domain = full & !state.row_mask[row] & !state.col_mask[col2];
+
+        // Domain should NOT include digit d
+        kani::assert(
+            (domain & (1u32 << d)) == 0,
+            "domain should exclude digit placed in same row",
+        );
+    }
+
+    /// Proves domain computation excludes digits placed in the same column.
+    ///
+    /// Key Latin constraint: if digit d is placed in column c,
+    /// then domain for any other cell in column c must NOT include d.
+    #[kani::proof]
+    fn domain_excludes_placed_in_col() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let col: usize = kani::any();
+        let row1: usize = kani::any();
+        let row2: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(col < n as usize);
+        kani::assume(row1 < n as usize && row2 < n as usize);
+        kani::assume(row1 != row2);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        // Place digit d at (row1, col)
+        place(&mut state, row1, col, d);
+
+        // Compute domain for cell (row2, col) - another cell in same column
+        let full = full_domain(n);
+        let domain = full & !state.row_mask[row2] & !state.col_mask[col];
+
+        // Domain should NOT include digit d
+        kani::assert(
+            (domain & (1u32 << d)) == 0,
+            "domain should exclude digit placed in same column",
+        );
+    }
+
+    /// Proves grid cell value matches placed digit.
+    #[kani::proof]
+    fn place_sets_grid_value() {
+        let n: u8 = kani::any();
+        kani::assume(n >= 2 && n <= 9);
+
+        let row: usize = kani::any();
+        let col: usize = kani::any();
+        let d: u8 = kani::any();
+        kani::assume(row < n as usize && col < n as usize);
+        kani::assume(d >= 1 && d <= n);
+
+        let a = (n as usize) * (n as usize);
+        let mut state = State {
+            n,
+            grid: vec![0; a],
+            row_mask: vec![0u32; n as usize],
+            col_mask: vec![0u32; n as usize],
+            cage_of_cell: vec![0; a],
+        };
+
+        place(&mut state, row, col, d);
+        let idx = row * (n as usize) + col;
+
+        kani::assert(state.grid[idx] == d, "grid should contain placed digit");
     }
 }

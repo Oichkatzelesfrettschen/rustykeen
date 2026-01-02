@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="KenKen Solver"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Grid Size Selection -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Grid Size:" />
+
+        <Spinner
+            android:id="@+id/gridSizeSpinner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:entries="@array/grid_sizes" />
+
+    </LinearLayout>
+
+    <!-- Puzzle Description Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SGT-Desc Format:"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/puzzleDescInput"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:gravity="top|start"
+            android:inputType="text"
+            android:hint="e.g., _5,a1a2a2a1"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- Deduction Tier Selection -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Deduction Tier:"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/tierRadioGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp">
+
+            <RadioButton
+                android:id="@+id/tierNone"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="None (pure backtracking)" />
+
+            <RadioButton
+                android:id="@+id/tierEasy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Easy (coarse enumeration)" />
+
+            <RadioButton
+                android:id="@+id/tierNormal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Normal (per-cell pruning)"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/tierHard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Hard (cross-cage elimination)" />
+
+        </RadioGroup>
+
+    </LinearLayout>
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="16dp"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/solveButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Solve" />
+
+        <Space
+            android:layout_width="16dp"
+            android:layout_height="0dp" />
+
+        <Button
+            android:id="@+id/exampleButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Load Example" />
+
+    </LinearLayout>
+
+    <!-- Output Scroll Area -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Loading Indicator -->
+            <TextView
+                android:id="@+id/loadingOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#FF9800"
+                android:visibility="gone" />
+
+            <!-- Solution -->
+            <TextView
+                android:id="@+id/solutionOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone" />
+
+            <!-- Status Message -->
+            <TextView
+                android:id="@+id/statusOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#4CAF50"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone" />
+
+            <!-- Error Message -->
+            <TextView
+                android:id="@+id/errorOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#F44336"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

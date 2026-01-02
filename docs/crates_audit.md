@@ -1,7 +1,7 @@
 # Crates Audit and 2026 Optimization Stack (2026-01-01)
 
-Note: this file is an aspirational 2026 stack, but it now also records what is *actually integrated* in code today.
-For the canonical target list and per-crate upstream links, see `docs/crate_audit_list.md` and `docs/deps/README.md`.
+This is the **single source of truth** for third-party crate selection and integration status.
+For per-crate upstream links, see `docs/deps/README.md`.
 
 ## Master Crate List (comma-separated)
 uniffi, fixed, rkyv, smallvec, rand, rand_pcg, wide, dlx_rs, rayon, bumpalo, bitvec, varisat, dashmap, num-integer, petgraph, criterion, parking_lot, itertools, proptest, once_cell, mimalloc, anyhow, thiserror, nom, tracing, tracing-android, z3, bolero, kani, creusot

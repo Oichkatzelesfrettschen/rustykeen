@@ -5,9 +5,11 @@ members = [
   "kenken-io",
   "kenken-simd",
   "kenken-solver",
+  "kenken-verify",
   "kenken-uniffi",
   "kenken-cli",
 ]
+exclude = ["fuzz"]
 resolver = "3"
 
 [workspace.package]
@@ -19,6 +21,7 @@ publish = false
 [workspace.lints.rust]
 unsafe_code = "forbid"
 warnings = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
 
 [workspace.dependencies]
 thiserror = "2"
@@ -29,6 +32,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+tracing-flame = "0.2"
+fixedbitset = "0.5"
+smallbitvec = "2.5"
+criterion = { version = "0.5", default-features = false, features = ["rayon"] }
+pprof = { version = "0.15", features = ["criterion", "flamegraph"] }
+proptest = "1"
 
 [profile.release]
 opt-level = 3

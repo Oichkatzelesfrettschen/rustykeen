@@ -13,7 +13,9 @@ kenken-core = { path = "../kenken-core" }
 kenken-solver = { path = "../kenken-solver" }
 thiserror.workspace = true
 mimalloc = { version = "0.1", optional = true }
-tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, optional = true, features = ["env-filter"] }
+tracing-flame = { workspace = true, optional = true }
 
 [features]
 default = ["std", "telemetry-subscriber"]
@@ -25,3 +27,10 @@ telemetry-tracing = []
 bench-criterion = []
 alloc-mimalloc = ["dep:mimalloc"]
 telemetry-subscriber = ["dep:tracing-subscriber"]
+
+# Profiling features
+prof-flame = ["dep:tracing-flame", "dep:tracing-subscriber"]
+
+[[bin]]
+name = "profile_spans"
+required-features = ["prof-flame"]

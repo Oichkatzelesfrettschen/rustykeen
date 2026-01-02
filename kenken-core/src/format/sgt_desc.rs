@@ -69,11 +69,14 @@ pub fn parse_keen_desc(n: u8, desc: &str) -> Result<Puzzle, SgtDescError> {
         let (op, target) = parse_clue(&mut it, cage_size)?;
         let members = core::mem::take(&mut members_by_min[min]);
         let cage_op = if members.len() == 1 { Op::Eq } else { op };
-        cages_by_min.push((min, Cage {
-            cells: members.into(),
-            op: cage_op,
-            target,
-        }));
+        cages_by_min.push((
+            min,
+            Cage {
+                cells: members.into(),
+                op: cage_op,
+                target,
+            },
+        ));
     }
 
     if it.peek().is_some() {

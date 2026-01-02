@@ -1,0 +1,7 @@
+(lang dune 3.15)
+(name kenken_verify_rocq)
+(version 0.0.1)
+(package
+ (name kenken_verify_rocq)
+ (depends
+  (rocq (= 9.1.0))))

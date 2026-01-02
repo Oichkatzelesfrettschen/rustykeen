@@ -20,5 +20,9 @@ default = ["std", "format-sgt-desc"]
 std = []
 serde = ["dep:serde"]
 format-sgt-desc = []
+core-u64 = []
 core-bitvec = ["dep:bitvec"]
 perf-assertions = ["dep:static_assertions"]
+
+[dev-dependencies]
+proptest.workspace = true
