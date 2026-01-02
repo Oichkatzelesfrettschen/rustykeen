@@ -181,6 +181,7 @@ fn search_with_stats(
         col_mask: vec![0u64; n],
         cage_of_cell,
         tuple_cache: HashMap::new(),
+        mrv_cache: MrvCache::new(puzzle.n),
     };
 
     let mut count = 0u32;
@@ -217,6 +218,7 @@ fn search_with_stats_deducing(
         col_mask: vec![0u64; n],
         cage_of_cell,
         tuple_cache: HashMap::new(),
+        mrv_cache: MrvCache::new(puzzle.n),
     };
 
     let mut forced = Vec::new();
@@ -257,6 +259,10 @@ struct State {
     /// Only used for n >= 4; cache skipped for tiny puzzles (n <= 3).
     #[allow(dead_code)]
     tuple_cache: HashMap<CacheTupleKey, CachedTupleResult>,
+    /// Incremental MRV cache for Tier 2.2 optimization.
+    /// Tracks minimum-remaining-value cell and invalidates selectively.
+    #[allow(dead_code)]
+    mrv_cache: MrvCache,
 }
 
 /// Check if all cells in a cage are fully assigned (domain size == 1).
@@ -271,6 +277,53 @@ fn all_cells_fully_assigned(cells: &[usize], domains: &[u64]) -> bool {
         }
     }
     true
+}
+
+/// State for incremental MRV computation (Tier 2.2 optimization).
+/// Maintains the minimum-remaining-value cell and invalidates selectively.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct MrvCache {
+    min_cell: usize,
+    min_count: u32,
+    valid: bool,
+    dirty_cells: Vec<bool>,
+}
+
+impl MrvCache {
+    fn new(n: u8) -> Self {
+        let size = (n as usize) * (n as usize);
+        Self {
+            min_cell: 0,
+            min_count: n as u32 + 1,
+            valid: false,
+            dirty_cells: vec![false; size],
+        }
+    }
+
+    #[allow(dead_code)]
+    fn reset_dirty(&mut self) {
+        for dirty in &mut self.dirty_cells {
+            *dirty = false;
+        }
+        self.valid = false;
+    }
+
+    #[allow(dead_code)]
+    fn mark_dirty(&mut self, idx: usize) {
+        self.dirty_cells[idx] = true;
+        self.valid = false;
+    }
+
+    #[allow(dead_code)]
+    fn mark_clean(&mut self, idx: usize) {
+        self.dirty_cells[idx] = false;
+    }
+
+    #[allow(dead_code)]
+    fn has_dirty_cells(&self) -> bool {
+        self.dirty_cells.iter().any(|&d| d)
+    }
 }
 
 /// Compute any_mask (union of valid values) from fully-assigned cage cells.
