@@ -226,8 +226,8 @@ fn search_with_stats_deducing(
         return Ok(0);
     }
 
-    // Tier 2.2: Cache needs recomputation after propagation modifies domains
-    state.mrv_cache.valid = false;
+    // Tier 2.2: After propagation, dirty cells are marked. Cache validity is preserved
+    // (choose_mrv_cell will check if cached cell is dirty and rescan if needed)
 
     let mut count = 0u32;
     backtrack_deducing(
@@ -501,10 +501,8 @@ fn backtrack_deducing(
                 propagate(puzzle, rules, tier, state, &mut forced)?
             };
 
-        // Tier 2.2: Invalidate MRV cache after propagation modifies domains
-        if feasible && tier != DeductionTier::None {
-            state.mrv_cache.valid = false;
-        }
+        // Tier 2.2: Dirty cells are marked during propagation. Cache validity is preserved
+        // (choose_mrv_cell will check if cached cell is dirty and rescan if needed)
 
         if likely(feasible) {
             backtrack_deducing(
@@ -775,11 +773,19 @@ fn propagate(
         }
 
         for cage in &puzzle.cages {
+            // Tier 2.2: Track which cells might have domain changes
+            let cage_cells: Vec<usize> = cage.cells.iter().map(|c| c.0 as usize).collect();
+
             #[cfg(feature = "alloc-bumpalo")]
             apply_cage_deduction_with_bump(&bump, puzzle, rules, state, cage, tier, &mut domains)?;
 
             #[cfg(not(feature = "alloc-bumpalo"))]
             apply_cage_deduction(puzzle, rules, state, cage, tier, &mut domains)?;
+
+            // Tier 2.2: Mark cells in this cage as potentially dirty (domains may have changed)
+            for &idx in &cage_cells {
+                state.mrv_cache.mark_dirty(idx);
+            }
         }
 
         for (idx, &dom) in domains.iter().enumerate() {
