@@ -31,13 +31,14 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "not yet implemented")]
     fn test_sat_stub() {
         let puzzle = Puzzle {
             n: 2,
             cages: vec![],
         };
         let solution = vec![1, 2, 2, 1];
-        let _ = verify_with_sat(&puzzle, &solution);
+        let result = verify_with_sat(&puzzle, &solution);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not yet implemented"));
     }
 }

@@ -6,7 +6,10 @@
 
 #[cfg(feature = "verify")]
 pub fn verify_solution_is_unique(n: u8, solution: &[u8]) -> Result<(), String> {
-    use z3::{Config, Context, SatResult, Solver, ast::{Int, Ast}};
+    use z3::{
+        Config, Context, SatResult, Solver,
+        ast::{Ast, Int},
+    };
 
     if solution.len() != (n as usize) * (n as usize) {
         return Err("Solution length mismatch".to_string());

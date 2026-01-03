@@ -7,7 +7,7 @@
 //!
 //! Feature flags:
 //! - `tracing`: enables `tracing::trace!` in hot paths (no subscriber required by the library).
-//! - `perf-likely`: enables branch prediction hints via `likely_stable`.
+//! - `perf-likely`: enables branch prediction hints for hot paths.
 //! - `alloc-bumpalo`: uses `bumpalo` scratch arenas for propagation temporaries.
 //!
 use kenken_core::rules::{Op, Ruleset};
@@ -27,9 +27,10 @@ macro_rules! instrument {
 }
 
 #[cfg(feature = "perf-likely")]
-use likely_stable::likely;
+use crate::hints::likely;
 
 #[cfg(not(feature = "perf-likely"))]
+#[inline(always)]
 fn likely(v: bool) -> bool {
     v
 }
@@ -264,8 +265,8 @@ struct CachedTupleResult {
 struct State {
     n: u8,
     grid: Vec<u8>,
-    row_mask: Vec<u64>,  // Extended to u64 to support n <= 63
-    col_mask: Vec<u64>,  // Extended to u64 to support n <= 63
+    row_mask: Vec<u64>, // Extended to u64 to support n <= 63
+    col_mask: Vec<u64>, // Extended to u64 to support n <= 63
     cage_of_cell: Vec<usize>,
     /// Memoization cache for enumerate_cage_tuples results.
     /// Maps (cage_signature, domain_hash) -> (per_pos, any_mask).
@@ -362,7 +363,12 @@ fn compute_any_mask_from_assigned(cells: &[usize], domains: &[u64]) -> u64 {
 /// CRITICAL: Includes deduction tier to prevent cache mixing across different propagation contexts.
 #[inline]
 #[allow(dead_code)]
-fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64], tier: DeductionTier) -> CacheTupleKey {
+fn compute_cache_key(
+    cage: &Cage,
+    cells: &[usize],
+    domains: &[u64],
+    tier: DeductionTier,
+) -> CacheTupleKey {
     // Simple hash of cell indices
     let mut cells_hash = 0u64;
     for &cell in cells.iter() {
@@ -392,7 +398,14 @@ fn compute_cache_key(cage: &Cage, cells: &[usize], domains: &[u64], tier: Deduct
         DeductionTier::Hard => 3u8,
     };
 
-    (op_byte, tier_byte, cage.target, cells.len(), cells_hash, domain_hash)
+    (
+        op_byte,
+        tier_byte,
+        cage.target,
+        cells.len(),
+        cells_hash,
+        domain_hash,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -432,7 +445,7 @@ fn backtrack(
 
             if cache.check(&partial_cells, &partial_values) {
                 stats.nogoods_hit += 1;
-                return Ok(());  // Prune this branch: matches a known nogood
+                return Ok(()); // Prune this branch: matches a known nogood
             }
         }
     }
@@ -603,7 +616,7 @@ fn backtrack_deducing(
     // Tier 2.3: LCV (Least Constraining Value) heuristic
     // If enabled, score values and try least constraining first
     #[cfg(feature = "lcv-heuristic")]
-    let mut values_to_try = {
+    let values_to_try = {
         let mut values = Vec::new();
         let mut mask = domain;
         while mask != 0 {
@@ -620,8 +633,7 @@ fn backtrack_deducing(
     };
 
     #[cfg(not(feature = "lcv-heuristic"))]
-    #[allow(unused_mut)]
-    let mut values_to_try = {
+    let values_to_try = {
         let mut values = Vec::new();
         let mut mask = domain;
         while mask != 0 {
@@ -633,26 +645,6 @@ fn backtrack_deducing(
         }
         values
     };
-
-    #[cfg(feature = "symmetry-breaking")]
-    {
-        // Only apply symmetry breaking if we're assigning to row 0 (first row).
-        // Safety: Symmetry breaking is ONLY SAFE for puzzles where row/column permutations
-        // preserve the puzzle structure. This is true for Latin square puzzles with no
-        // spatial constraints, but NOT for most KenKen puzzles where cages break symmetries.
-        //
-        // Current limitation: This optimization is disabled for safety until we can
-        // reliably detect puzzle symmetry. To re-enable for specific puzzle types,
-        // add a runtime check to verify cage structure is symmetric.
-        if false && row == 0 && col > 0 {
-            // Placeholder for future: add safety checks here
-            values_to_try = crate::symmetry::filter_symmetric_values(
-                &state.grid,
-                col,
-                values_to_try,
-            );
-        }
-    }
 
     let mut tried = 0u32;
     for (d, _score) in values_to_try {
@@ -829,10 +821,10 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &mut State) -> Result<Option<(usize, 
             // Cell still unfilled; use cached domain computation
             let row = min_idx / n;
             let col = min_idx % n;
-            if let Ok(dom) = domain_for_cell(puzzle, state, min_idx, row, col) {
-                if popcount_u64(dom) > 0 {
-                    return Ok(Some((min_idx, dom)));
-                }
+            if let Ok(dom) = domain_for_cell(puzzle, state, min_idx, row, col)
+                && popcount_u64(dom) > 0
+            {
+                return Ok(Some((min_idx, dom)));
             }
         }
         // Cache miss (cell filled or domain empty): invalidate and rescan
@@ -1024,7 +1016,8 @@ fn apply_cage_deduction(
             // TIER 1.2: If both cells are fully assigned, verify constraint directly
             if tier != DeductionTier::Hard
                 && domains[a_idx].count_ones() == 1
-                && domains[b_idx].count_ones() == 1 {
+                && domains[b_idx].count_ones() == 1
+            {
                 // Both cells have exactly one value; check constraint directly
                 let av = (a_dom.trailing_zeros() + 1) as u8;
                 let bv = (b_dom.trailing_zeros() + 1) as u8;
@@ -1136,7 +1129,13 @@ fn apply_cage_deduction(
                     // All cells have exactly one value; skip enumeration and compute any_mask directly
                     let any_mask = compute_any_mask_from_assigned(&cells, domains);
                     let per_pos = vec![any_mask; cells.len()];
-                    (per_pos, any_mask, vec![0u64; n], vec![0u64; n], any_mask != 0)
+                    (
+                        per_pos,
+                        any_mask,
+                        vec![0u64; n],
+                        vec![0u64; n],
+                        any_mask != 0,
+                    )
                 } else if n >= 6 {
                     // TIER 1.1: Cache enumeration results (only for n >= 6)
                     let cache_key = compute_cache_key(cage, &cells, domains, tier);
@@ -1712,21 +1711,15 @@ fn enumerate_cage_tuples(
 ) {
     // Phase 6.1 optimization: Use running sum/product instead of recomputing from scratch
     enumerate_cage_tuples_impl(
-        cage,
-        cells,
-        coords,
-        domains,
-        pos,
-        chosen,
-        per_pos,
-        any_mask,
-        0i32,    // running_sum (initialized to 0)
-        1i32,    // running_prod (initialized to 1)
+        cage, cells, coords, domains, pos, chosen, per_pos, any_mask,
+        0i32, // running_sum (initialized to 0)
+        1i32, // running_prod (initialized to 1)
     );
 }
 
 #[cfg(not(feature = "alloc-bumpalo"))]
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn enumerate_cage_tuples_impl(
     cage: &Cage,
     cells: &[usize],
@@ -1736,8 +1729,8 @@ fn enumerate_cage_tuples_impl(
     chosen: &mut Vec<u8>,
     per_pos: &mut [u64],
     any_mask: &mut u64,
-    running_sum: i32,      // Phase 6.1: accumulated sum
-    running_prod: i32,     // Phase 6.1: accumulated product
+    running_sum: i32,  // Phase 6.1: accumulated sum
+    running_prod: i32, // Phase 6.1: accumulated product
 ) {
     if pos == cells.len() {
         // Phase 6.1: Use running values instead of recomputing
@@ -1770,8 +1763,8 @@ fn enumerate_cage_tuples_impl(
                     chosen,
                     per_pos,
                     any_mask,
-                    new_sum,       // Pass incremental sum
-                    1,             // product not used for Add
+                    new_sum, // Pass incremental sum
+                    1,       // product not used for Add
                 );
             }
         } else if cage.op == Op::Mul {
@@ -1787,8 +1780,8 @@ fn enumerate_cage_tuples_impl(
                     chosen,
                     per_pos,
                     any_mask,
-                    0,             // sum not used for Mul
-                    new_prod,      // Pass incremental product
+                    0,        // sum not used for Mul
+                    new_prod, // Pass incremental product
                 );
             }
         } else {
@@ -1801,7 +1794,7 @@ fn enumerate_cage_tuples_impl(
                 chosen,
                 per_pos,
                 any_mask,
-                running_sum,   // Pass through for other operations
+                running_sum, // Pass through for other operations
                 running_prod,
             );
         }
@@ -1887,20 +1880,9 @@ fn enumerate_cage_tuples_collect(
 ) {
     // Phase 6.1 optimization: Use running sum/product instead of recomputing from scratch
     enumerate_cage_tuples_collect_impl(
-        n,
-        cage,
-        cells,
-        coords,
-        domains,
-        pos,
-        chosen,
-        per_pos,
-        any_mask,
-        must_row,
-        must_col,
-        found,
-        0i32,    // running_sum (initialized to 0)
-        1i32,    // running_prod (initialized to 1)
+        n, cage, cells, coords, domains, pos, chosen, per_pos, any_mask, must_row, must_col, found,
+        0i32, // running_sum (initialized to 0)
+        1i32, // running_prod (initialized to 1)
     );
 }
 
@@ -1920,8 +1902,8 @@ fn enumerate_cage_tuples_collect_impl(
     must_row: &mut [Option<u64>],
     must_col: &mut [Option<u64>],
     found: &mut bool,
-    running_sum: i32,      // Phase 6.1: accumulated sum
-    running_prod: i32,     // Phase 6.1: accumulated product
+    running_sum: i32,  // Phase 6.1: accumulated sum
+    running_prod: i32, // Phase 6.1: accumulated product
 ) {
     if pos == cells.len() {
         // Phase 6.1: Use running values instead of recomputing
@@ -1982,8 +1964,8 @@ fn enumerate_cage_tuples_collect_impl(
                     must_row,
                     must_col,
                     found,
-                    new_sum,       // Pass incremental sum
-                    1,             // product not used for Add
+                    new_sum, // Pass incremental sum
+                    1,       // product not used for Add
                 );
             }
         } else if cage.op == Op::Mul {
@@ -2003,8 +1985,8 @@ fn enumerate_cage_tuples_collect_impl(
                     must_row,
                     must_col,
                     found,
-                    0,             // sum not used for Mul
-                    new_prod,      // Pass incremental product
+                    0,        // sum not used for Mul
+                    new_prod, // Pass incremental product
                 );
             }
         } else {
@@ -2021,7 +2003,7 @@ fn enumerate_cage_tuples_collect_impl(
                 must_row,
                 must_col,
                 found,
-                running_sum,   // Pass through for other operations
+                running_sum, // Pass through for other operations
                 running_prod,
             );
         }

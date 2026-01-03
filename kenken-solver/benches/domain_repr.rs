@@ -10,10 +10,9 @@
 /// 1. Microbenchmarks: individual operations (create, insert, remove, count, bitwise ops)
 /// 2. Macrobenchmarks: full solver workload with different domains
 /// 3. Solver scaling: how domain representation affects overall solver performance
-
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use kenken_core::{Cage, CellId, Puzzle};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use kenken_core::rules::{Op, Ruleset};
+use kenken_core::{Cage, CellId, Puzzle};
 use kenken_solver::{Domain32, Domain64, DomainOps};
 
 #[cfg(feature = "solver-fixedbitset")]
@@ -29,38 +28,30 @@ fn bench_domain_creation(c: &mut Criterion) {
     for n in [2, 4, 6, 8, 16, 32].iter() {
         // Domain32 baseline
         if *n <= 31 {
-            group.bench_with_input(
-                BenchmarkId::new("Domain32/full", n),
-                n,
-                |b, &n| b.iter(|| Domain32::full(black_box(n))),
-            );
+            group.bench_with_input(BenchmarkId::new("Domain32/full", n), n, |b, &n| {
+                b.iter(|| Domain32::full(black_box(n)))
+            });
         }
 
         // Domain64
         if *n <= 63 {
-            group.bench_with_input(
-                BenchmarkId::new("Domain64/full", n),
-                n,
-                |b, &n| b.iter(|| Domain64::full(black_box(n))),
-            );
+            group.bench_with_input(BenchmarkId::new("Domain64/full", n), n, |b, &n| {
+                b.iter(|| Domain64::full(black_box(n)))
+            });
         }
 
         // FixedBitDomain
         #[cfg(feature = "solver-fixedbitset")]
-        group.bench_with_input(
-            BenchmarkId::new("FixedBit/full", n),
-            n,
-            |b, &n| b.iter(|| FixedBitDomain::full(black_box(n))),
-        );
+        group.bench_with_input(BenchmarkId::new("FixedBit/full", n), n, |b, &n| {
+            b.iter(|| FixedBitDomain::full(black_box(n)))
+        });
 
         // SmallBitDomain (n <= 8 only)
         #[cfg(feature = "solver-smallbitvec")]
         if *n <= 8 {
-            group.bench_with_input(
-                BenchmarkId::new("SmallBit/full", n),
-                n,
-                |b, &n| b.iter(|| SmallBitDomain::full(black_box(n))),
-            );
+            group.bench_with_input(BenchmarkId::new("SmallBit/full", n), n, |b, &n| {
+                b.iter(|| SmallBitDomain::full(black_box(n)))
+            });
         }
     }
 
@@ -74,72 +65,56 @@ fn bench_domain_operations(c: &mut Criterion) {
     for n in [4, 6, 8, 16, 32].iter() {
         if *n <= 31 {
             let d = Domain32::full(*n);
-            group.bench_with_input(
-                BenchmarkId::new("Domain32/insert", n),
-                n,
-                |b, _| b.iter(|| {
+            group.bench_with_input(BenchmarkId::new("Domain32/insert", n), n, |b, _| {
+                b.iter(|| {
                     let mut domain = black_box(d);
                     domain.insert(black_box(1));
-                }),
-            );
-            group.bench_with_input(
-                BenchmarkId::new("Domain32/count", n),
-                n,
-                |b, _| b.iter(|| d.count()),
-            );
+                })
+            });
+            group.bench_with_input(BenchmarkId::new("Domain32/count", n), n, |b, _| {
+                b.iter(|| d.count())
+            });
         }
 
         if *n <= 63 {
             let d = Domain64::full(*n);
-            group.bench_with_input(
-                BenchmarkId::new("Domain64/insert", n),
-                n,
-                |b, _| b.iter(|| {
+            group.bench_with_input(BenchmarkId::new("Domain64/insert", n), n, |b, _| {
+                b.iter(|| {
                     let mut domain = black_box(d);
                     domain.insert(black_box(1));
-                }),
-            );
-            group.bench_with_input(
-                BenchmarkId::new("Domain64/count", n),
-                n,
-                |b, _| b.iter(|| d.count()),
-            );
+                })
+            });
+            group.bench_with_input(BenchmarkId::new("Domain64/count", n), n, |b, _| {
+                b.iter(|| d.count())
+            });
         }
 
         #[cfg(feature = "solver-fixedbitset")]
         {
             let d = FixedBitDomain::full(*n);
-            group.bench_with_input(
-                BenchmarkId::new("FixedBit/insert", n),
-                n,
-                |b, _| b.iter(|| {
+            group.bench_with_input(BenchmarkId::new("FixedBit/insert", n), n, |b, _| {
+                b.iter(|| {
                     let mut domain = black_box(d.clone());
                     domain.insert(black_box(1));
-                }),
-            );
-            group.bench_with_input(
-                BenchmarkId::new("FixedBit/count", n),
-                n,
-                |b, _| b.iter(|| d.count()),
-            );
+                })
+            });
+            group.bench_with_input(BenchmarkId::new("FixedBit/count", n), n, |b, _| {
+                b.iter(|| d.count())
+            });
         }
 
         #[cfg(feature = "solver-smallbitvec")]
         if *n <= 8 {
             let d = SmallBitDomain::full(*n);
-            group.bench_with_input(
-                BenchmarkId::new("SmallBit/insert", n),
-                n,
-                |b, _| b.iter(|| {
+            group.bench_with_input(BenchmarkId::new("SmallBit/insert", n), n, |b, _| {
+                b.iter(|| {
                     let mut domain = black_box(d.clone());
                     domain.insert(black_box(1));
-                }),
-            );
-            group.bench_with_input(
-                BenchmarkId::new("SmallBit/count", n),
-                n,
-                |b, _| b.iter(|| d.count()),
-            );
+                })
+            });
+            group.bench_with_input(BenchmarkId::new("SmallBit/count", n), n, |b, _| {
+                b.iter(|| d.count())
+            });
         }
     }
 
@@ -223,10 +198,7 @@ fn bench_solver_workload(c: &mut Criterion) {
             BenchmarkId::new("Domain32", format!("{}x{}", puzzle_size, puzzle_size)),
             |b| {
                 b.iter(|| {
-                    let _result = kenken_solver::solve_one(
-                        black_box(puzzle),
-                        black_box(rules),
-                    );
+                    let _result = kenken_solver::solve_one(black_box(puzzle), black_box(rules));
                 });
             },
         );
@@ -237,10 +209,7 @@ fn bench_solver_workload(c: &mut Criterion) {
                 BenchmarkId::new("Domain64", format!("{}x{}", puzzle_size, puzzle_size)),
                 |b| {
                     b.iter(|| {
-                        let _result = kenken_solver::solve_one(
-                            black_box(puzzle),
-                            black_box(rules),
-                        );
+                        let _result = kenken_solver::solve_one(black_box(puzzle), black_box(rules));
                     });
                 },
             );

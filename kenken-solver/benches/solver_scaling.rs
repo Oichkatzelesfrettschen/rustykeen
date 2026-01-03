@@ -14,12 +14,11 @@
 /// Flamegraph Output:
 /// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
 /// - Shows which solver components dominate at different grid sizes
-
-use criterion::{criterion_group, criterion_main, Criterion};
-use pprof::criterion::{Output, PProfProfiler};
-use kenken_core::{Puzzle, Cage, CellId};
+use criterion::{Criterion, criterion_group, criterion_main};
 use kenken_core::rules::{Op, Ruleset};
+use kenken_core::{Cage, CellId, Puzzle};
 use kenken_solver::count_solutions_up_to;
+use pprof::criterion::{Output, PProfProfiler};
 use smallvec::smallvec;
 
 fn create_trivial_puzzle(n: u8) -> Puzzle {

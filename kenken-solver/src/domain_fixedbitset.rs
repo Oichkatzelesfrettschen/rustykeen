@@ -55,17 +55,11 @@ impl DomainOps for FixedBitDomain {
     }
 
     fn min(&self) -> Option<u8> {
-        self.bits
-            .ones()
-            .next()
-            .map(|i| (i + 1) as u8)
+        self.bits.ones().next().map(|i| (i + 1) as u8)
     }
 
     fn max(&self) -> Option<u8> {
-        self.bits
-            .ones()
-            .last()
-            .map(|i| (i + 1) as u8)
+        self.bits.ones().next_back().map(|i| (i + 1) as u8)
     }
 
     fn and(&self, other: &Self) -> Self {

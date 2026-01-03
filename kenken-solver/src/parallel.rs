@@ -51,10 +51,7 @@ use kenken_core::rules::Ruleset;
 /// 2. Exposing branching control points for rayon work distribution
 /// 3. Integrating rayon `par_iter().find_map_any()` for work-stealing
 /// 4. Merging statistics from winning thread
-pub fn solve_one_parallel(
-    puzzle: &Puzzle,
-    rules: Ruleset,
-) -> Result<Option<Solution>, SolveError> {
+pub fn solve_one_parallel(puzzle: &Puzzle, rules: Ruleset) -> Result<Option<Solution>, SolveError> {
     // Stub: delegates to serial solver
     // Full implementation would use rayon work-stealing on first-level branches
     crate::solve_one(puzzle, rules)

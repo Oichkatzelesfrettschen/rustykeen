@@ -41,15 +41,15 @@ impl DomainOps for Domain256 {
         let mut limbs = [u64::MAX; 4];
 
         // Zero out unused limbs
-        for i in 0..4 {
+        for (i, limb) in limbs.iter_mut().enumerate() {
             let limb_start = (i * 64) as u8;
             if limb_start >= n {
-                limbs[i] = 0;
+                *limb = 0;
             } else {
                 let limb_end = ((i + 1) * 64).min(n as usize) as u8;
                 let bits_in_limb = limb_end - limb_start;
                 if bits_in_limb < 64 {
-                    limbs[i] = (1u64 << bits_in_limb) - 1;
+                    *limb = (1u64 << bits_in_limb) - 1;
                 }
             }
         }
@@ -92,7 +92,10 @@ impl DomainOps for Domain256 {
         }
         #[cfg(not(feature = "simd-dispatch"))]
         {
-            self.0[0].count_ones() + self.0[1].count_ones() + self.0[2].count_ones() + self.0[3].count_ones()
+            self.0[0].count_ones()
+                + self.0[1].count_ones()
+                + self.0[2].count_ones()
+                + self.0[3].count_ones()
         }
     }
 
@@ -146,7 +149,6 @@ impl DomainOps for Domain256 {
     }
 
     fn complement(&self, n: u8) -> Self {
-
         let full = Self::full(n);
         Domain256([
             self.0[0] ^ full.0[0],
@@ -157,14 +159,11 @@ impl DomainOps for Domain256 {
     }
 
     fn iter_values(&self) -> Box<dyn Iterator<Item = u8> + '_> {
-        Box::new(
-            (0..4)
-                .flat_map(move |i| {
-                    (0..64)
-                        .filter(move |&j| (self.0[i] & (1u64 << j)) != 0)
-                        .map(move |j| 1 + (i as u8 * 64) + (j as u8))
-                })
-        )
+        Box::new((0..4).flat_map(move |i| {
+            (0..64)
+                .filter(move |&j| (self.0[i] & (1u64 << j)) != 0)
+                .map(move |j| 1 + (i as u8 * 64) + (j as u8))
+        }))
     }
 
     fn clear(&mut self) {
@@ -290,10 +289,10 @@ mod tests {
         let mut d = Domain256::empty();
 
         // Test values across different limbs
-        d.insert(1);     // Limb 0
-        d.insert(65);    // Limb 1
-        d.insert(129);   // Limb 2
-        d.insert(193);   // Limb 3
+        d.insert(1); // Limb 0
+        d.insert(65); // Limb 1
+        d.insert(129); // Limb 2
+        d.insert(193); // Limb 3
 
         assert_eq!(d.count(), 4);
         assert_eq!(d.min(), Some(1));

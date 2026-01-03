@@ -107,7 +107,7 @@ impl NogoodCache {
     /// If cache is at capacity, evicts the oldest (least recently used) nogood.
     pub fn record(&mut self, cells: Vec<(usize, usize)>, values: Vec<u8>, level: usize) {
         // Zip cells and values, sort by cells, then unzip to keep them paired
-        let mut paired: Vec<_> = cells.into_iter().zip(values.into_iter()).collect();
+        let mut paired: Vec<_> = cells.into_iter().zip(values).collect();
         paired.sort_unstable_by_key(|(cell, _)| *cell);
 
         let (sorted_cells, sorted_values) = paired.into_iter().unzip();
@@ -169,7 +169,10 @@ mod tests {
         let cells = vec![(0, 0), (0, 1)];
         let values = vec![1, 2];
 
-        assert!(nogood.matches(&cells, &values), "Identical assignment should match");
+        assert!(
+            nogood.matches(&cells, &values),
+            "Identical assignment should match"
+        );
     }
 
     #[test]
@@ -198,13 +201,13 @@ mod tests {
         assert_eq!(cache.cache.len(), 1);
 
         // Check matching nogood (hit)
-        let found = cache.check(&vec![(0, 0), (1, 1)], &vec![1, 2]);
+        let found = cache.check(&[(0, 0), (1, 1)], &[1, 2]);
         assert!(found, "Should find matching nogood");
         assert_eq!(cache.hits, 1);
         assert_eq!(cache.misses, 0);
 
         // Check non-matching nogood (miss)
-        let found = cache.check(&vec![(0, 0), (1, 1)], &vec![1, 3]);
+        let found = cache.check(&[(0, 0), (1, 1)], &[1, 3]);
         assert!(!found, "Should not find non-matching nogood");
         assert_eq!(cache.hits, 1);
         assert_eq!(cache.misses, 1);
@@ -224,7 +227,7 @@ mod tests {
         assert_eq!(cache.cache.len(), 2);
 
         // First nogood should be gone
-        let found = cache.check(&vec![(0, 0)], &vec![1]);
+        let found = cache.check(&[(0, 0)], &[1]);
         assert!(!found, "First (evicted) nogood should be gone");
     }
 
@@ -243,10 +246,10 @@ mod tests {
         assert_eq!(cache.cache.len(), 1, "Should keep only level < 2");
 
         // Only first nogood should remain
-        let found = cache.check(&vec![(0, 0)], &vec![1]);
+        let found = cache.check(&[(0, 0)], &[1]);
         assert!(found, "Level 1 nogood should remain");
 
-        let found = cache.check(&vec![(1, 1)], &vec![2]);
+        let found = cache.check(&[(1, 1)], &[2]);
         assert!(!found, "Level 2+ nogoods should be cleared");
     }
 
@@ -265,8 +268,8 @@ mod tests {
         let mut cache = NogoodCache::new(10);
 
         cache.record(vec![(0, 0)], vec![1], 1);
-        cache.check(&vec![(0, 0)], &vec![1]); // hit
-        cache.check(&vec![(1, 1)], &vec![2]); // miss
+        cache.check(&[(0, 0)], &[1]); // hit
+        cache.check(&[(1, 1)], &[2]); // miss
 
         let (hits, misses, size) = cache.stats();
         assert_eq!(hits, 1);
@@ -283,7 +286,7 @@ mod tests {
 
         // Check with same values but different cell order
         // (In practice, cells from backtracker should be in order)
-        let found = cache.check(&vec![(0, 0), (1, 1)], &vec![1, 2]);
+        let found = cache.check(&[(0, 0), (1, 1)], &[1, 2]);
         assert!(found, "Sorted cells should still match");
     }
 }

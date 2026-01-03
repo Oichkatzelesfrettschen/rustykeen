@@ -1,3 +1,6 @@
+use kenken_core::format::sgt_desc::parse_keen_desc;
+use kenken_core::rules::Ruleset;
+use kenken_solver::{DeductionTier, solve_one_with_deductions};
 /// CPU Flamegraph Profiling Binary
 ///
 /// Generates detailed CPU flamegraphs via perf/pprof for performance analysis.
@@ -7,11 +10,7 @@
 ///   cargo flamegraph --release --bench profile_flames -o /tmp/solver_flame.svg
 ///
 /// Then open /tmp/solver_flame.svg in a browser to analyze where time is spent.
-
 use std::hint::black_box;
-use kenken_core::format::sgt_desc::parse_keen_desc;
-use kenken_core::rules::Ruleset;
-use kenken_solver::{DeductionTier, solve_one_with_deductions};
 
 fn main() {
     let rules = Ruleset::keen_baseline();
@@ -21,13 +20,10 @@ fn main() {
     let puzzles = vec![
         // 2x2 - baseline, minimal overhead (valid SGT: "b__,a3a3")
         (2, "b__,a3a3", "2x2_simple", 2000),
-
         // 3x3 - need valid SGT format (3 rows of 3 cells each with letters)
         (3, "aab,cdb,eeb", "3x3_simple", 1000),
-
         // 4x4 - all singleton cages (easiest case)
         (4, "abcd,efgh,ijkl,mnop", "4x4_trivial", 500),
-
         // 5x5 - all singleton cages
         (5, "abcde,fghij,klmno,pqrst,uvwxy", "5x5_trivial", 200),
     ];
@@ -66,5 +62,7 @@ fn main() {
         }
     }
 
-    eprintln!("\nProfiler finished. Use: cargo flamegraph --release --bench profile_flames -o /tmp/solver_flame.svg");
+    eprintln!(
+        "\nProfiler finished. Use: cargo flamegraph --release --bench profile_flames -o /tmp/solver_flame.svg"
+    );
 }
