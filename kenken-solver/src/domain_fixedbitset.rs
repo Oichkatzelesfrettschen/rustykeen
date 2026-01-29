@@ -64,7 +64,7 @@ impl DomainOps for FixedBitDomain {
     fn max(&self) -> Option<u8> {
         self.bits
             .ones()
-            .last()
+            .next_back()
             .map(|i| (i + 1) as u8)
     }
 

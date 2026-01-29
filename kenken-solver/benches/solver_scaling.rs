@@ -14,7 +14,6 @@
 /// Flamegraph Output:
 /// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
 /// - Shows which solver components dominate at different grid sizes
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
 use kenken_core::{Puzzle, Cage, CellId};

@@ -16,10 +16,11 @@ fn main() {
     for seed in 0..1000u64 {
         let config = GenerateConfig::keen_baseline(4, seed);
 
-        if let Ok(result) = generate_with_stats(config) {
-            if let Some(tier) = result.tier_result.tier_required {
-                if tier == DeductionTier::Hard && !hard_tier_found {
-                    if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+        if let Ok(result) = generate_with_stats(config)
+            && let Some(tier) = result.tier_result.tier_required
+            && tier == DeductionTier::Hard && !hard_tier_found
+            && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+        {
                         let grid = result.solution.iter()
                             .map(|&v| format!("{}", v))
                             .collect::<Vec<_>>()
@@ -35,13 +36,15 @@ fn main() {
                         println!("      solution: Some(&[{}]),", grid);
                         println!("      label: \"4x4 Hard-tier puzzle (seed {})\",", seed);
                         println!("  }},");
-                        println!();
-                        hard_tier_found = true;
-                    }
-                }
+            println!();
+            hard_tier_found = true;
+        }
 
-                if tier == DeductionTier::Normal && !normal_tier_found {
-                    if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+        if let Ok(result) = generate_with_stats(config)
+            && let Some(tier) = result.tier_result.tier_required
+            && tier == DeductionTier::Normal && !normal_tier_found
+            && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+        {
                         let grid = result.solution.iter()
                             .map(|&v| format!("{}", v))
                             .collect::<Vec<_>>()
@@ -57,15 +60,12 @@ fn main() {
                         println!("      solution: Some(&[{}]),", grid);
                         println!("      label: \"4x4 Normal-tier puzzle (seed {})\",", seed);
                         println!("  }},");
-                        println!();
-                        normal_tier_found = true;
-                    }
-                }
+            println!();
+            normal_tier_found = true;
+        }
 
-                if hard_tier_found && normal_tier_found {
-                    break;
-                }
-            }
+        if hard_tier_found && normal_tier_found {
+            break;
         }
 
         if (seed + 1) % 100 == 0 {

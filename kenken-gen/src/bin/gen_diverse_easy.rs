@@ -15,10 +15,11 @@ fn main() {
     for seed in 0..500u64 {
         let config = GenerateConfig::keen_baseline(3, seed);
 
-        if let Ok(result) = generate_with_stats(config) {
-            if let Some(tier) = result.tier_result.tier_required {
-                if tier == DeductionTier::Easy {
-                    if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+        if let Ok(result) = generate_with_stats(config)
+            && let Some(tier) = result.tier_result.tier_required
+            && tier == DeductionTier::Easy
+            && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+        {
                         let grid = result.solution.iter()
                             .map(|&v| format!("{}", v))
                             .collect::<Vec<_>>()
@@ -36,12 +37,9 @@ fn main() {
                         println!("  }},");
                         println!();
 
-                        easy_count += 1;
-                        if easy_count >= target_count {
-                            break;
-                        }
-                    }
-                }
+            easy_count += 1;
+            if easy_count >= target_count {
+                break;
             }
         }
 
@@ -58,10 +56,11 @@ fn main() {
     for seed in 0..500u64 {
         let config = GenerateConfig::keen_baseline(4, seed);
 
-        if let Ok(result) = generate_with_stats(config) {
-            if let Some(tier) = result.tier_result.tier_required {
-                if tier == DeductionTier::Easy {
-                    if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+        if let Ok(result) = generate_with_stats(config)
+            && let Some(tier) = result.tier_result.tier_required
+            && tier == DeductionTier::Easy
+            && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+        {
                         let grid = result.solution.iter()
                             .map(|&v| format!("{}", v))
                             .collect::<Vec<_>>()
@@ -79,12 +78,9 @@ fn main() {
                         println!("  }},");
                         println!();
 
-                        easy_count += 1;
-                        if easy_count >= target_count_4x4 {
-                            break;
-                        }
-                    }
-                }
+            easy_count += 1;
+            if easy_count >= target_count_4x4 {
+                break;
             }
         }
 

@@ -7,7 +7,6 @@
 ///   cargo flamegraph --release --bench profile_flames -o /tmp/solver_flame.svg
 ///
 /// Then open /tmp/solver_flame.svg in a browser to analyze where time is spent.
-
 use std::hint::black_box;
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::rules::Ruleset;

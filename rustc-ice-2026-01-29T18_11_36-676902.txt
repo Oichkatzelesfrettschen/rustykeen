@@ -1,0 +1,31 @@
+thread 'rustc' panicked at /rustc-dev/8d670b93d40737e1b320fd892c6f169ffa35e49e/compiler/rustc_codegen_ssa/src/back/write.rs:1768:6:
+failed to spawn coordinator thread: Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" }
+stack backtrace:
+   0:     0x7fd291619d1b - <std[f0a5191623bf9ec5]::backtrace::Backtrace>::create
+   1:     0x7fd291619c65 - <std[f0a5191623bf9ec5]::backtrace::Backtrace>::force_capture
+   2:     0x7fd290613557 - std[f0a5191623bf9ec5]::panicking::update_hook::<alloc[1e8d056461914a71]::boxed::Box<rustc_driver_impl[ab8d32c7f55b5de1]::install_ice_hook::{closure#1}>>::{closure#0}
+   3:     0x7fd29162c5c2 - std[f0a5191623bf9ec5]::panicking::panic_with_hook
+   4:     0x7fd29160ec58 - std[f0a5191623bf9ec5]::panicking::panic_handler::{closure#0}
+   5:     0x7fd2916035b9 - std[f0a5191623bf9ec5]::sys::backtrace::__rust_end_short_backtrace::<std[f0a5191623bf9ec5]::panicking::panic_handler::{closure#0}, !>
+   6:     0x7fd29161070d - __rustc[9001c1eae3a25eaa]::rust_begin_unwind
+   7:     0x7fd28e593dbc - core[da2935d4b23b47c4]::panicking::panic_fmt
+   8:     0x7fd28df97c42 - core[da2935d4b23b47c4]::result::unwrap_failed
+   9:     0x7fd292fbbf84 - rustc_codegen_ssa[c085e5fe1fa7af6c]::base::codegen_crate::<rustc_codegen_llvm[c69126f4e806854]::LlvmCodegenBackend>
+  10:     0x7fd292fb90bd - <rustc_codegen_llvm[c69126f4e806854]::LlvmCodegenBackend as rustc_codegen_ssa[c085e5fe1fa7af6c]::traits::backend::CodegenBackend>::codegen_crate
+  11:     0x7fd292f9690f - <rustc_interface[4a2072d18dab0c90]::queries::Linker>::codegen_and_build_linker
+  12:     0x7fd292f936d9 - <rustc_interface[4a2072d18dab0c90]::passes::create_and_enter_global_ctxt<core[da2935d4b23b47c4]::option::Option<rustc_interface[4a2072d18dab0c90]::queries::Linker>, rustc_driver_impl[ab8d32c7f55b5de1]::run_compiler::{closure#0}::{closure#2}>::{closure#2} as core[da2935d4b23b47c4]::ops::function::FnOnce<(&rustc_session[b8927fbcfeb3a40]::session::Session, rustc_middle[183c5cda2bfbb29a]::ty::context::CurrentGcx, alloc[1e8d056461914a71]::sync::Arc<rustc_data_structures[5c8105a67bc0fa7f]::jobserver::Proxy>, &std[f0a5191623bf9ec5]::sync::once_lock::OnceLock<rustc_middle[183c5cda2bfbb29a]::ty::context::GlobalCtxt>, &rustc_data_structures[5c8105a67bc0fa7f]::sync::worker_local::WorkerLocal<rustc_middle[183c5cda2bfbb29a]::arena::Arena>, &rustc_data_structures[5c8105a67bc0fa7f]::sync::worker_local::WorkerLocal<rustc_hir[b49a1b015c065f8f]::Arena>, rustc_driver_impl[ab8d32c7f55b5de1]::run_compiler::{closure#0}::{closure#2})>>::call_once::{shim:vtable#0}
+  13:     0x7fd292e4bf18 - rustc_interface[4a2072d18dab0c90]::interface::run_compiler::<(), rustc_driver_impl[ab8d32c7f55b5de1]::run_compiler::{closure#0}>::{closure#1}
+  14:     0x7fd292d0f90e - std[f0a5191623bf9ec5]::sys::backtrace::__rust_begin_short_backtrace::<rustc_interface[4a2072d18dab0c90]::util::run_in_thread_with_globals<rustc_interface[4a2072d18dab0c90]::util::run_in_thread_pool_with_globals<rustc_interface[4a2072d18dab0c90]::interface::run_compiler<(), rustc_driver_impl[ab8d32c7f55b5de1]::run_compiler::{closure#0}>::{closure#1}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>
+  15:     0x7fd292d0f6e0 - <std[f0a5191623bf9ec5]::thread::lifecycle::spawn_unchecked<rustc_interface[4a2072d18dab0c90]::util::run_in_thread_with_globals<rustc_interface[4a2072d18dab0c90]::util::run_in_thread_pool_with_globals<rustc_interface[4a2072d18dab0c90]::interface::run_compiler<(), rustc_driver_impl[ab8d32c7f55b5de1]::run_compiler::{closure#0}>::{closure#1}, ()>::{closure#0}, ()>::{closure#0}::{closure#0}, ()>::{closure#1} as core[da2935d4b23b47c4]::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  16:     0x7fd292d0dab8 - <std[f0a5191623bf9ec5]::sys::thread::unix::Thread>::new::thread_start
+  17:     0x7fd28c6a80d6 - start_thread
+                               at /usr/src/debug/glibc/glibc/nptl/pthread_create.c:448:8
+  18:     0x7fd28c73b09c - __clone3
+  19:                0x0 - <unknown>
+
+
+rustc version: 1.94.0-nightly (8d670b93d 2025-12-31)
+platform: x86_64-unknown-linux-gnu
+
+query stack during panic:
+end of query stack

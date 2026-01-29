@@ -11,7 +11,6 @@
 /// Flamegraph Output:
 /// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
 /// - Run with `cargo bench --bench simd_effectiveness` to generate profiling data
-
 use criterion::{criterion_group, criterion_main, Criterion};
 use pprof::criterion::{Output, PProfProfiler};
 use kenken_simd::{popcount_u32, popcount_u64, popcount_u32_slice_sum};

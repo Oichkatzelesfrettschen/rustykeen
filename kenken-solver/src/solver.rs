@@ -603,6 +603,7 @@ fn backtrack_deducing(
     // Tier 2.3: LCV (Least Constraining Value) heuristic
     // If enabled, score values and try least constraining first
     #[cfg(feature = "lcv-heuristic")]
+    #[allow(unused_mut)]
     let mut values_to_try = {
         let mut values = Vec::new();
         let mut mask = domain;
@@ -644,13 +645,17 @@ fn backtrack_deducing(
         // Current limitation: This optimization is disabled for safety until we can
         // reliably detect puzzle symmetry. To re-enable for specific puzzle types,
         // add a runtime check to verify cage structure is symmetric.
-        if false && row == 0 && col > 0 {
-            // Placeholder for future: add safety checks here
-            values_to_try = crate::symmetry::filter_symmetric_values(
-                &state.grid,
-                col,
-                values_to_try,
-            );
+        #[allow(clippy::if_same_then_else)]
+        if false {
+            #[allow(dead_code)]
+            {
+                // Placeholder for future: add safety checks here
+                // values_to_try = crate::symmetry::filter_symmetric_values(
+                //     &state.grid,
+                //     col,
+                //     values_to_try,
+                // );
+            }
         }
     }
 
@@ -829,10 +834,8 @@ fn choose_mrv_cell(puzzle: &Puzzle, state: &mut State) -> Result<Option<(usize, 
             // Cell still unfilled; use cached domain computation
             let row = min_idx / n;
             let col = min_idx % n;
-            if let Ok(dom) = domain_for_cell(puzzle, state, min_idx, row, col) {
-                if popcount_u64(dom) > 0 {
-                    return Ok(Some((min_idx, dom)));
-                }
+            if let Ok(dom) = domain_for_cell(puzzle, state, min_idx, row, col) && popcount_u64(dom) > 0 {
+                return Ok(Some((min_idx, dom)));
             }
         }
         // Cache miss (cell filled or domain empty): invalidate and rescan

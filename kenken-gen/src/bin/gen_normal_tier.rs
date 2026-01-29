@@ -15,9 +15,10 @@ fn main() {
 
         match generate_with_stats(config) {
             Ok(result) => {
-                if let Some(tier) = result.tier_result.tier_required {
-                    if tier == DeductionTier::Normal {
-                        if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+                if let Some(tier) = result.tier_result.tier_required
+                    && tier == DeductionTier::Normal
+                    && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+                {
                             let grid = result.solution.iter()
                                 .map(|&v| format!("{}", v))
                                 .collect::<Vec<_>>()
@@ -35,11 +36,9 @@ fn main() {
                             println!("  }},");
                             println!();
 
-                            count_3x3 += 1;
-                            if count_3x3 >= 2 {
-                                break;
-                            }
-                        }
+                    count_3x3 += 1;
+                    if count_3x3 >= 2 {
+                        break;
                     }
                 }
             }
@@ -57,9 +56,10 @@ fn main() {
 
         match generate_with_stats(config) {
             Ok(result) => {
-                if let Some(tier) = result.tier_result.tier_required {
-                    if tier == DeductionTier::Normal {
-                        if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+                if let Some(tier) = result.tier_result.tier_required
+                    && tier == DeductionTier::Normal
+                    && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+                {
                             let grid = result.solution.iter()
                                 .map(|&v| format!("{}", v))
                                 .collect::<Vec<_>>()
@@ -77,11 +77,9 @@ fn main() {
                             println!("  }},");
                             println!();
 
-                            count_4x4 += 1;
-                            if count_4x4 >= 2 {
-                                break;
-                            }
-                        }
+                    count_4x4 += 1;
+                    if count_4x4 >= 2 {
+                        break;
                     }
                 }
             }

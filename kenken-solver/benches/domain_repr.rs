@@ -10,7 +10,6 @@
 /// 1. Microbenchmarks: individual operations (create, insert, remove, count, bitwise ops)
 /// 2. Macrobenchmarks: full solver workload with different domains
 /// 3. Solver scaling: how domain representation affects overall solver performance
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 use kenken_core::{Cage, CellId, Puzzle};
 use kenken_core::rules::{Op, Ruleset};

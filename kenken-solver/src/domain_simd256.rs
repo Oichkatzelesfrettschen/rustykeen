@@ -41,15 +41,15 @@ impl DomainOps for Domain256 {
         let mut limbs = [u64::MAX; 4];
 
         // Zero out unused limbs
-        for i in 0..4 {
+        for (i, limb) in limbs.iter_mut().enumerate() {
             let limb_start = (i * 64) as u8;
             if limb_start >= n {
-                limbs[i] = 0;
+                *limb = 0;
             } else {
                 let limb_end = ((i + 1) * 64).min(n as usize) as u8;
                 let bits_in_limb = limb_end - limb_start;
                 if bits_in_limb < 64 {
-                    limbs[i] = (1u64 << bits_in_limb) - 1;
+                    *limb = (1u64 << bits_in_limb) - 1;
                 }
             }
         }

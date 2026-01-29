@@ -14,8 +14,9 @@ fn main() {
     for seed in 0..2000u64 {
         let config = GenerateConfig::keen_baseline(5, seed);
 
-        if let Ok(result) = generate_with_stats(config) {
-            if let Ok(desc) = encode_keen_desc(&result.puzzle, rules) {
+        if let Ok(result) = generate_with_stats(config)
+            && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
+        {
                 let grid = result.solution.iter()
                     .map(|&v| format!("{}", v))
                     .collect::<Vec<_>>()
@@ -38,10 +39,9 @@ fn main() {
                 println!("  }},");
                 println!();
 
-                count += 1;
-                if count >= target {
-                    break;
-                }
+            count += 1;
+            if count >= target {
+                break;
             }
         }
 
