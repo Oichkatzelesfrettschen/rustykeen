@@ -1,0 +1,12 @@
+# Cargo configuration for rustykeen workspace
+# Limit parallelism to avoid memory exhaustion
+
+[build]
+# Limit to 4 parallel jobs (down from 12 cores) to reduce memory pressure
+jobs = 4
+
+[profile.dev]
+# Reduce optimization for faster builds and less memory usage
+opt-level = 0
+debug = 1
+split-debuginfo = "unpacked"
