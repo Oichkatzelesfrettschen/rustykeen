@@ -6,11 +6,13 @@
 pub mod accessibility;
 pub mod animator;
 pub mod theme;
+pub mod tutorial;
 pub mod visualization;
 pub mod widgets;
 
 pub use animator::Animator;
 pub use theme::ThemeEngine;
+pub use tutorial::{Lesson, TutorialProgress};
 pub use visualization::GridRenderer;
 
 /// Application state and top-level window manager
