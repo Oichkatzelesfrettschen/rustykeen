@@ -177,9 +177,132 @@ impl Lesson {
         }
     }
 
+    /// Create Lesson 4: Backtracking Logic (5x5).
+    pub fn lesson_4() -> Self {
+        Lesson {
+            id: 4,
+            title: "Backtracking Logic".to_string(),
+            objective: "Understand why solvers sometimes guess and backtrack when deduction stalls"
+                .to_string(),
+            grid_size: 5,
+            puzzle_desc: "a____,a____,a____,a____,a____".to_string(),
+            solution: vec![
+                1, 2, 3, 4, 5,
+                2, 3, 4, 5, 1,
+                3, 4, 5, 1, 2,
+                4, 5, 1, 2, 3,
+                5, 1, 2, 3, 4,
+            ],
+            steps: vec![
+                LessonStep {
+                    number: 1,
+                    instruction: "After applying all deductions, some cells may have multiple possibilities."
+                        .to_string(),
+                    explanation: "Deduction finds forced moves. When it stalls, guess at cell with fewest options."
+                        .to_string(),
+                    hint: Some("Look for cells with exactly 2 possible values (lowest branching factor)"
+                        .to_string()),
+                },
+                LessonStep {
+                    number: 2,
+                    instruction: "Make a guess: pick a cell and try one candidate value."
+                        .to_string(),
+                    explanation: "Apply deduction with this assumption. Either it works or leads to contradiction."
+                        .to_string(),
+                    hint: Some("Remember which cell you guessed so you can backtrack if needed".to_string()),
+                },
+                LessonStep {
+                    number: 3,
+                    instruction: "Continue deducing with your guess in place."
+                        .to_string(),
+                    explanation: "The guess may cascade: new constraints from new assignments enable more deductions."
+                        .to_string(),
+                    hint: None,
+                },
+                LessonStep {
+                    number: 4,
+                    instruction: "If you reach a contradiction, backtrack and try next candidate."
+                        .to_string(),
+                    explanation: "Contradiction means your guess was wrong. Undo it and try alternative."
+                        .to_string(),
+                    hint: None,
+                },
+                LessonStep {
+                    number: 5,
+                    instruction: "Backtracking with smart guessing (minimum remaining values) is very efficient."
+                        .to_string(),
+                    explanation: "By choosing cells with fewer options, you minimize search tree depth."
+                        .to_string(),
+                    hint: None,
+                },
+            ],
+        }
+    }
+
+    /// Create Lesson 5: Advanced Constraints (6x6).
+    pub fn lesson_5() -> Self {
+        Lesson {
+            id: 5,
+            title: "Advanced Constraints".to_string(),
+            objective: "Master complex cage operations and multi-cell interactions"
+                .to_string(),
+            grid_size: 6,
+            puzzle_desc: "a_____,a_____,a_____,a_____,a_____,a_____".to_string(),
+            solution: vec![
+                1, 2, 3, 4, 5, 6,
+                2, 3, 4, 5, 6, 1,
+                3, 4, 5, 6, 1, 2,
+                4, 5, 6, 1, 2, 3,
+                5, 6, 1, 2, 3, 4,
+                6, 1, 2, 3, 4, 5,
+            ],
+            steps: vec![
+                LessonStep {
+                    number: 1,
+                    instruction: "In 6x6, large 3+ cell cages have many combinations to consider."
+                        .to_string(),
+                    explanation: "Enumerate valid tuples respecting target and no repeats in cage."
+                        .to_string(),
+                    hint: Some("For Add=15 with 3 cells: what digit triplets sum to 15?".to_string()),
+                },
+                LessonStep {
+                    number: 2,
+                    instruction: "Sub and Div cages constrain ordering: a-b must equal target, a/b too."
+                        .to_string(),
+                    explanation: "Unlike Add/Mul (commutative), Sub/Div care about cell order."
+                        .to_string(),
+                    hint: Some("For Sub=1 cage: pairs (a,b) where a-b=1: (2,1), (3,2), ..., (6,5)"
+                        .to_string()),
+                },
+                LessonStep {
+                    number: 3,
+                    instruction: "Interaction: cage tuple constraints + row/column constraints."
+                        .to_string(),
+                    explanation: "If row has 1,2,3 and cage needs tuple (4,5,6), problem solved."
+                        .to_string(),
+                    hint: None,
+                },
+                LessonStep {
+                    number: 4,
+                    instruction: "Some 6x6 puzzles require backtracking despite advanced deduction."
+                        .to_string(),
+                    explanation: "Search space grows: intelligent guess + constraint propagation finds solution."
+                        .to_string(),
+                    hint: None,
+                },
+            ],
+        }
+    }
+
     /// Get all available lessons.
     pub fn all() -> Vec<Self> {
-        vec![Self::lesson_1(), Self::lesson_2(), Self::lesson_3()]
+        vec![
+            Self::lesson_1(),
+            Self::lesson_2(),
+            Self::lesson_3(),
+            Self::lesson_4(),
+            Self::lesson_5(),
+        ]
     }
 
     /// Get lesson by ID.
