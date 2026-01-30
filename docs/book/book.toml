@@ -1,7 +1,19 @@
 [book]
-title = "RustyKeen Engineering Book"
-authors = ["RustyKeen contributors"]
+title = "Rustykeen: Comprehensive KenKen Solver Documentation"
+description = "Complete guide to building, using, and extending the Rustykeen puzzle solver"
+authors = ["Eirik Rasmusen"]
 language = "en"
-multilingual = false
-src = "src"
+src = "."
 
+[build]
+build-dir = "../build"
+
+[output.html]
+theme = "light"
+default-theme = "light"
+preferred-dark-theme = "dark"
+mathjax-support = false
+
+[output.html.search]
+enable = true
+limit-results = 30
