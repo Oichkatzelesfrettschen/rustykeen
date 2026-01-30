@@ -1,7 +1,10 @@
 #![doc = "Grid rendering and visualization for solver backtracking animation"]
 
+pub mod ripple;
+
 use cairo::Context;
 use kenken_core::CellId;
+pub use ripple::{Ripple, RippleAnimator, RippleBurst};
 
 /// Color palette for visualizing solver state.
 #[derive(Debug, Clone)]
