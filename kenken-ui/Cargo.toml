@@ -1,0 +1,20 @@
+[package]
+name = "kenken-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+gtk4 = "0.9"
+cairo-rs = "0.20"
+pango = "0.20"
+gdk4 = "0.9"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+kenken-core = { path = "../kenken-core" }
+kenken-solver = { path = "../kenken-solver", features = ["ui-instrumentation"] }
+
+[dev-dependencies]

@@ -3,8 +3,8 @@
 //! This module contains implementations translated from Rocq/Coq formalization
 //! with correctness proofs. Each function has a corresponding theorem in rcoq/
 
-use kenken_core::{Cage, Puzzle};
 use kenken_core::rules::{Op, Ruleset};
+use kenken_core::{Cage, Puzzle};
 
 /// Verify that a proposed solution satisfies all constraints
 ///
@@ -59,11 +59,7 @@ pub fn verify_solution(puzzle: &Puzzle, solution: &[u8]) -> Result<(), String> {
 }
 
 /// Verify a single cage constraint
-fn verify_cage_constraint(
-    _n: u8,
-    cage: &Cage,
-    solution: &[u8],
-) -> Result<(), String> {
+fn verify_cage_constraint(_n: u8, cage: &Cage, solution: &[u8]) -> Result<(), String> {
     let values: Vec<u8> = cage
         .cells
         .iter()
@@ -77,10 +73,7 @@ fn verify_cage_constraint(
         Op::Add => {
             let sum: u32 = values.iter().map(|&v| v as u32).sum();
             if sum != target as u32 {
-                return Err(format!(
-                    "Cage ADD sum {} != target {}",
-                    sum, cage.target
-                ));
+                return Err(format!("Cage ADD sum {} != target {}", sum, cage.target));
             }
         }
         Op::Sub => {
@@ -89,10 +82,7 @@ fn verify_cage_constraint(
             }
             let diff = (values[0] as i32 - values[1] as i32).abs();
             if diff != target {
-                return Err(format!(
-                    "Cage SUB diff {} != target {}",
-                    diff, cage.target
-                ));
+                return Err(format!("Cage SUB diff {} != target {}", diff, cage.target));
             }
         }
         Op::Mul => {
@@ -125,10 +115,7 @@ fn verify_cage_constraint(
                 return Err("Eq cage must have exactly 1 cell".to_string());
             }
             if values[0] as i32 != target {
-                return Err(format!(
-                    "Cage EQ value {} != target {}",
-                    values[0], target
-                ));
+                return Err(format!("Cage EQ value {} != target {}", values[0], target));
             }
         }
     }

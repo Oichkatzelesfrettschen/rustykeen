@@ -1,7 +1,7 @@
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::rules::Ruleset;
-use kenken_solver::solve_one_with_deductions;
 use kenken_solver::DeductionTier;
+use kenken_solver::solve_one_with_deductions;
 
 fn main() {
     let rules = Ruleset::keen_baseline();
@@ -19,7 +19,8 @@ fn main() {
                 match puzzle.validate(rules) {
                     Ok(_) => {
                         eprintln!("  Validated OK");
-                        let result = solve_one_with_deductions(&puzzle, rules, DeductionTier::Normal);
+                        let result =
+                            solve_one_with_deductions(&puzzle, rules, DeductionTier::Normal);
                         eprintln!("  Solve result: {:?}", result.is_ok());
                     }
                     Err(e) => eprintln!("  Validation error: {:?}", e),

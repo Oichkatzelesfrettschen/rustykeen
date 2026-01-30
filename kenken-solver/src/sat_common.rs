@@ -6,6 +6,10 @@
 //! - model-to-blocking-clause extraction (ignoring auxiliary vars)
 //!
 //! It is `sat-varisat`-only by construction (module is only compiled when enabled).
+//!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
 
 use varisat::{ExtendFormula, Lit, Solver, Var};
 

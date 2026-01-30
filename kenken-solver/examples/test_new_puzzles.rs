@@ -8,7 +8,11 @@ fn main() {
         (2, "b__,a3a3", "2x2_add"),
         (3, "abc,def,ghi", "3x3_simple"),
         (4, "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p", "4x4_trivial"),
-        (5, "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y", "5x5_trivial"),
+        (
+            5,
+            "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y",
+            "5x5_trivial",
+        ),
     ];
 
     for (n, desc, label) in puzzles {

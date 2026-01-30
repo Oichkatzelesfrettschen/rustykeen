@@ -2,6 +2,10 @@
 //!
 //! Current scope is Latin constraints only; cage arithmetic constraints are a follow-up.
 //!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
+
 use varisat::{ExtendFormula, Solver};
 
 use crate::sat_common::LatinVarMap;

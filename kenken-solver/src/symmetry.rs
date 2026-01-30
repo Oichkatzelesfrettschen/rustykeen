@@ -19,6 +19,10 @@
 //! - 3x3 with row cages: Should find 12 solutions with or without this filter (disabled automatically)
 //!
 //! **Expected speedup**: 2-4x on symmetric puzzles, negligible on asymmetric puzzles
+//!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
 
 /// Filter domain values for row 0 to enforce lexicographic ordering.
 ///

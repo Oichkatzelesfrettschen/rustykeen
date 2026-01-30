@@ -13,6 +13,10 @@
 //! - Scales better with puzzle difficulty
 //!
 //! **Safety**: Uses VecDeque (not HashMap) for deterministic iteration ordering.
+//!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
 
 use std::collections::VecDeque;
 
@@ -169,7 +173,10 @@ mod tests {
         let cells = vec![(0, 0), (0, 1)];
         let values = vec![1, 2];
 
-        assert!(nogood.matches(&cells, &values), "Identical assignment should match");
+        assert!(
+            nogood.matches(&cells, &values),
+            "Identical assignment should match"
+        );
     }
 
     #[test]

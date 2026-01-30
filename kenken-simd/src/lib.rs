@@ -62,7 +62,9 @@ fn select_popcount_u128() -> fn([u64; 2]) -> u32 {
         if std::arch::is_x86_feature_detected!("popcnt") {
             return popcount_u128_x86_popcnt;
         }
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("ssse3") {
+        if std::arch::is_x86_feature_detected!("avx2")
+            && std::arch::is_x86_feature_detected!("ssse3")
+        {
             return popcount_u128_x86_ssse3_lut;
         }
         if std::arch::is_x86_feature_detected!("sse2") {
@@ -200,8 +202,8 @@ unsafe fn popcount_u128_x86_ssse3_lut_inner(x: [u64; 2]) -> u32 {
     // SSSE3 PSHUFB lookup table: ~800-1000 ps for 128 bits
     // Lookup: popcount for each 4-bit nibble
     let lookup = _mm_setr_epi8(
-        0, 1, 1, 2, 1, 2, 2, 3,  // popcount(0x0..0x7)
-        1, 2, 2, 3, 2, 3, 3, 4   // popcount(0x8..0xF)
+        0, 1, 1, 2, 1, 2, 2, 3, // popcount(0x0..0x7)
+        1, 2, 2, 3, 2, 3, 3, 4, // popcount(0x8..0xF)
     );
     let mask = _mm_set1_epi8(0x0F);
 

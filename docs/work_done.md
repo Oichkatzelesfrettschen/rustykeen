@@ -2,7 +2,7 @@
 
 This document is a "what exists today" counterbalance to `docs/plan.md` (what we're building toward).
 
-Last updated: 2026-01-01
+Last updated: 2026-01-29
 
 ## Toolchain / CI
 - Toolchain pinned: `rust-toolchain.toml` (`nightly-2026-01-01`)

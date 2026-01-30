@@ -2,8 +2,25 @@
 
 This document catalogs external dependencies, identifies candidates for refactoring or internalization, and outlines a migration roadmap to reduce dependency bloat while maintaining functionality.
 
-**Last Updated**: 2026-01-02
-**Dependency Count**: ~80 (minimal) to ~280 (all features)
+**Last Updated**: 2026-01-29
+**Dependency Count**: ~80 (minimal) to ~270 (all features)
+
+## Completion Status
+
+**Phase 1.1: Internalize dlx-rs** - COMPLETED (2026-01-29)
+- [x] Implemented Dancing Links algorithm in kenken-solver/src/dlx.rs (~200 LOC)
+- [x] Removed external dlx-rs dependency
+- [x] All 7 DLX tests passing
+
+**Phase 1.2: Internalize likely_stable** - COMPLETED (2026-01-29)
+- [x] Implemented hints.rs module in kenken-core (~120 LOC)
+- [x] Removed likely_stable dependency
+- [x] All builds successful with no regressions
+
+**Phase 1.3: Bit Vector Consolidation** - COMPLETED (2026-01-29)
+- [x] Removed smallbitvec domain representation (was ~250 LOC)
+- [x] Consolidated to FixedBitSet as canonical external heap option
+- [x] Updated benchmarks to remove SmallBitDomain references
 
 ---
 

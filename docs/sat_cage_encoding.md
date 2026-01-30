@@ -123,3 +123,35 @@ Current repo status:
 The current plan uses a tuple-enumeration strategy instead of encoding arithmetic circuits:
 - `kenken_core::Cage::valid_permutations(...)` enumerates satisfying ordered tuples up to `max_tuples`.
 - SAT encoders can then use those tuples to build selector allowlists.
+
+## 6) Performance Characteristics: SAT vs Backtracking
+
+Empirical benchmarking (2026-01-29) on AMD Ryzen 5 5600X3D:
+
+| Puzzle | Backtracking | SAT | Winner |
+|--------|--------------|-----|--------|
+| 4x4 Mixed (16 cages) | 17.68µs | 80.71µs | Backtracking (4.57x faster) |
+| 6x6 Add-heavy (16 cages) | 55.60µs | 832.53µs | Backtracking (14.97x faster) |
+| 6x6 Mul-heavy (15 cages) | 180.28µs | 1.64ms | Backtracking (9.12x faster) |
+
+**Analysis:**
+
+The backtracking solver significantly outperforms SAT for typical KenKen puzzles due to:
+1. Highly optimized MRV/LCV heuristics and constraint propagation
+2. Small search space for unique puzzles (early exit on first solution)
+3. SAT encoding overhead (clause generation + DPLL initialization)
+4. Small problem sizes where SAT solver overhead dominates
+
+**When SAT is valuable:**
+- **Uniqueness certification** in puzzle generation (count up to 2 solutions)
+- **Formal verification** of puzzle properties
+- **Fallback** when tuple explosion makes backtracking impractical (rare)
+- **Alternative proof path** for validation and testing
+
+**Recommendation:**
+Continue using backtracking as the primary solver. Use SAT for:
+- Generator uniqueness checks (optional certification hook)
+- Validation of puzzle corpus properties
+- Research and formal verification purposes
+
+SAT is not intended to replace backtracking for solving, but to complement it as a certification tool.

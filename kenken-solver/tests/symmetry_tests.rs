@@ -10,7 +10,7 @@
 
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::rules::Ruleset;
-use kenken_solver::{count_solutions_up_to, solve_one, DeductionTier};
+use kenken_solver::{DeductionTier, count_solutions_up_to, solve_one};
 
 const RULES: Ruleset = Ruleset::keen_baseline();
 
@@ -26,7 +26,10 @@ fn simple_2x2_puzzle_solves_with_feature() {
     let puzzle = parse_keen_desc(2, "b__,a3a3").expect("Should parse puzzle");
     let solution = solve_one(&puzzle, RULES);
     assert!(solution.is_ok(), "Should be able to solve");
-    assert!(solution.unwrap().is_some(), "2x2 puzzle should have a solution");
+    assert!(
+        solution.unwrap().is_some(),
+        "2x2 puzzle should have a solution"
+    );
 }
 
 #[test]
@@ -105,7 +108,8 @@ fn feature_preserves_solve_stats() {
 #[test]
 fn feature_with_4x4_puzzle() {
     // Test with a 4x4 singleton grid puzzle from the corpus
-    let puzzle = parse_keen_desc(4, "_25,a1a2a3a4a2a1a4a3a3a4a1a2a4a3a2a1").expect("Should parse puzzle");
+    let puzzle =
+        parse_keen_desc(4, "_25,a1a2a3a4a2a1a4a3a3a4a1a2a4a3a2a1").expect("Should parse puzzle");
     let solution = solve_one(&puzzle, RULES).expect("Should solve");
     assert!(solution.is_some(), "4x4 puzzle should have a solution");
 }

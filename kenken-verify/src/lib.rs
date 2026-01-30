@@ -34,18 +34,12 @@ mod sat_interface {
 /// Public API: Verify a solution against a puzzle using extracted proofs
 ///
 /// Returns Ok(()) if solution is valid, Err with description if invalid.
-pub fn verify_solution(
-    puzzle: &kenken_core::Puzzle,
-    solution: &[u8],
-) -> Result<(), String> {
+pub fn verify_solution(puzzle: &kenken_core::Puzzle, solution: &[u8]) -> Result<(), String> {
     verified_solver::verify_solution(puzzle, solution)
 }
 
 /// Public API: Count solutions up to a limit using verified counting
-pub fn count_solutions_up_to(
-    puzzle: &kenken_core::Puzzle,
-    limit: usize,
-) -> Result<usize, String> {
+pub fn count_solutions_up_to(puzzle: &kenken_core::Puzzle, limit: usize) -> Result<usize, String> {
     verified_solver::count_solutions_up_to(puzzle, limit)
 }
 

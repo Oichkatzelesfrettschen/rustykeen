@@ -1,0 +1,42 @@
+=== Baseline Performance Benchmarks ===
+Hardware: x86_64 Linux
+CPU: AMD Ryzen 5 5600X3D 6-Core Processor
+Date: 2026-01-29
+
+--- 2x2 Cyclic Puzzle (100 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 2 --count 100 --tier normal
+  Time (mean ± σ):       1.4 ms ±   0.3 ms    [User: 1.2 ms, System: 0.4 ms]
+  Range (min … max):     1.1 ms …   2.1 ms    10 runs
+ 
+--- 3x3 Cyclic Puzzle (100 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 3 --count 100 --tier normal
+  Time (mean ± σ):       2.2 ms ±   0.6 ms    [User: 1.7 ms, System: 0.5 ms]
+  Range (min … max):     1.7 ms …   3.3 ms    10 runs
+ 
+--- 4x4 Cyclic Puzzle (100 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 4 --count 100 --tier normal
+  Time (mean ± σ):       3.2 ms ±   0.6 ms    [User: 2.8 ms, System: 0.5 ms]
+  Range (min … max):     2.6 ms …   4.2 ms    10 runs
+ 
+--- 5x5 Cyclic Puzzle (50 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 5 --count 50 --tier normal
+  Time (mean ± σ):       2.6 ms ±   0.7 ms    [User: 1.9 ms, System: 0.7 ms]
+  Range (min … max):     2.0 ms …   3.8 ms    10 runs
+ 
+--- 6x6 Cyclic Puzzle (50 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 6 --count 50 --tier normal
+  Time (mean ± σ):       3.1 ms ±   0.7 ms    [User: 2.8 ms, System: 0.4 ms]
+  Range (min … max):     2.6 ms …   4.8 ms    10 runs
+ 
+--- 8x8 Cyclic Puzzle (20 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 8 --count 20 --tier normal
+  Time (mean ± σ):       2.5 ms ±   0.6 ms    [User: 2.2 ms, System: 0.3 ms]
+  Range (min … max):     2.0 ms …   4.0 ms    10 runs
+ 
+--- 9x9 Cyclic Puzzle (10 solves) ---
+Benchmark 1: ./target/release/kenken-cli benchmark --n 9 --count 10 --tier normal
+  Time (mean ± σ):       1.6 ms ±   0.3 ms    [User: 1.1 ms, System: 0.5 ms]
+  Range (min … max):     1.4 ms …   2.3 ms    10 runs
+ 
+
+=== Benchmark Complete ===

@@ -1,8 +1,8 @@
 use kenken_core::format::sgt_desc::encode_keen_desc;
 use kenken_core::rules::Ruleset;
-use kenken_gen::generate_with_stats;
 use kenken_gen::GenerateConfig;
-use kenken_solver::{DifficultyTier, DeductionTier};
+use kenken_gen::generate_with_stats;
+use kenken_solver::{DeductionTier, DifficultyTier};
 
 fn main() {
     let rules = Ruleset::keen_baseline();
@@ -19,22 +19,24 @@ fn main() {
                     && tier == DeductionTier::Normal
                     && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
                 {
-                            let grid = result.solution.iter()
-                                .map(|&v| format!("{}", v))
-                                .collect::<Vec<_>>()
-                                .join(", ");
+                    let grid = result
+                        .solution
+                        .iter()
+                        .map(|&v| format!("{}", v))
+                        .collect::<Vec<_>>()
+                        .join(", ");
 
-                            println!("Found 3x3 Normal-tier puzzle (seed {}):", seed);
-                            println!("  GoldenPuzzle {{");
-                            println!("      n: 3,");
-                            println!("      desc: \"{}\",", desc);
-                            println!("      solutions: 1,");
-                            println!("      difficulty: Some(DifficultyTier::Normal),");
-                            println!("      tier_required: Some(DeductionTier::Normal),");
-                            println!("      solution: Some(&[{}]),", grid);
-                            println!("      label: \"3x3 Normal-tier puzzle (seed {})\",", seed);
-                            println!("  }},");
-                            println!();
+                    println!("Found 3x3 Normal-tier puzzle (seed {}):", seed);
+                    println!("  GoldenPuzzle {{");
+                    println!("      n: 3,");
+                    println!("      desc: \"{}\",", desc);
+                    println!("      solutions: 1,");
+                    println!("      difficulty: Some(DifficultyTier::Normal),");
+                    println!("      tier_required: Some(DeductionTier::Normal),");
+                    println!("      solution: Some(&[{}]),", grid);
+                    println!("      label: \"3x3 Normal-tier puzzle (seed {})\",", seed);
+                    println!("  }},");
+                    println!();
 
                     count_3x3 += 1;
                     if count_3x3 >= 2 {
@@ -60,22 +62,24 @@ fn main() {
                     && tier == DeductionTier::Normal
                     && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
                 {
-                            let grid = result.solution.iter()
-                                .map(|&v| format!("{}", v))
-                                .collect::<Vec<_>>()
-                                .join(", ");
+                    let grid = result
+                        .solution
+                        .iter()
+                        .map(|&v| format!("{}", v))
+                        .collect::<Vec<_>>()
+                        .join(", ");
 
-                            println!("Found 4x4 Normal-tier puzzle (seed {}):", seed);
-                            println!("  GoldenPuzzle {{");
-                            println!("      n: 4,");
-                            println!("      desc: \"{}\",", desc);
-                            println!("      solutions: 1,");
-                            println!("      difficulty: Some(DifficultyTier::Normal),");
-                            println!("      tier_required: Some(DeductionTier::Normal),");
-                            println!("      solution: Some(&[{}]),", grid);
-                            println!("      label: \"4x4 Normal-tier puzzle (seed {})\",", seed);
-                            println!("  }},");
-                            println!();
+                    println!("Found 4x4 Normal-tier puzzle (seed {}):", seed);
+                    println!("  GoldenPuzzle {{");
+                    println!("      n: 4,");
+                    println!("      desc: \"{}\",", desc);
+                    println!("      solutions: 1,");
+                    println!("      difficulty: Some(DifficultyTier::Normal),");
+                    println!("      tier_required: Some(DeductionTier::Normal),");
+                    println!("      solution: Some(&[{}]),", grid);
+                    println!("      label: \"4x4 Normal-tier puzzle (seed {})\",", seed);
+                    println!("  }},");
+                    println!();
 
                     count_4x4 += 1;
                     if count_4x4 >= 2 {

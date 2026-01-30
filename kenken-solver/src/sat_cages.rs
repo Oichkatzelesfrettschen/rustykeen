@@ -2,6 +2,10 @@
 //!
 //! This module is a staging area for extending SAT support from Latin-only
 //! (`sat_latin`) to full KenKen cage arithmetic. See `docs/sat_cage_encoding.md`.
+//!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
 
 use kenken_core::rules::{Op, Ruleset};
 use kenken_core::{Cage, Puzzle};

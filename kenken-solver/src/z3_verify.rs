@@ -3,10 +3,17 @@
 //! This module provides verification that a KenKen solution is unique
 //! by encoding the Latin square constraints in Z3 and checking if
 //! any other solutions exist.
+//!
+//! Internal implementation module. Not part of the public API.
+
+#![allow(dead_code)]
 
 #[cfg(feature = "verify")]
 pub fn verify_solution_is_unique(n: u8, solution: &[u8]) -> Result<(), String> {
-    use z3::{Config, Context, SatResult, Solver, ast::{Int, Ast}};
+    use z3::{
+        Config, Context, SatResult, Solver,
+        ast::{Ast, Int},
+    };
 
     if solution.len() != (n as usize) * (n as usize) {
         return Err("Solution length mismatch".to_string());

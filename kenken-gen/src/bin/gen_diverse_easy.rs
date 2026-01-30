@@ -1,7 +1,7 @@
 use kenken_core::format::sgt_desc::encode_keen_desc;
 use kenken_core::rules::Ruleset;
-use kenken_gen::generate_with_stats;
 use kenken_gen::GenerateConfig;
+use kenken_gen::generate_with_stats;
 use kenken_solver::DeductionTier;
 
 fn main() {
@@ -20,22 +20,27 @@ fn main() {
             && tier == DeductionTier::Easy
             && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
         {
-                        let grid = result.solution.iter()
-                            .map(|&v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", ");
+            let grid = result
+                .solution
+                .iter()
+                .map(|&v| format!("{}", v))
+                .collect::<Vec<_>>()
+                .join(", ");
 
-                        println!("Found 3x3 Easy-tier puzzle (seed {}):", seed);
-                        println!("  GoldenPuzzle {{");
-                        println!("      n: 3,");
-                        println!("      desc: \"{}\",", desc);
-                        println!("      solutions: 1,");
-                        println!("      difficulty: Some(DifficultyTier::Easy),");
-                        println!("      tier_required: Some(DeductionTier::Easy),");
-                        println!("      solution: Some(&[{}]),", grid);
-                        println!("      label: \"3x3 Easy-tier puzzle with cages (seed {})\",", seed);
-                        println!("  }},");
-                        println!();
+            println!("Found 3x3 Easy-tier puzzle (seed {}):", seed);
+            println!("  GoldenPuzzle {{");
+            println!("      n: 3,");
+            println!("      desc: \"{}\",", desc);
+            println!("      solutions: 1,");
+            println!("      difficulty: Some(DifficultyTier::Easy),");
+            println!("      tier_required: Some(DeductionTier::Easy),");
+            println!("      solution: Some(&[{}]),", grid);
+            println!(
+                "      label: \"3x3 Easy-tier puzzle with cages (seed {})\",",
+                seed
+            );
+            println!("  }},");
+            println!();
 
             easy_count += 1;
             if easy_count >= target_count {
@@ -61,22 +66,27 @@ fn main() {
             && tier == DeductionTier::Easy
             && let Ok(desc) = encode_keen_desc(&result.puzzle, rules)
         {
-                        let grid = result.solution.iter()
-                            .map(|&v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", ");
+            let grid = result
+                .solution
+                .iter()
+                .map(|&v| format!("{}", v))
+                .collect::<Vec<_>>()
+                .join(", ");
 
-                        println!("Found 4x4 Easy-tier puzzle (seed {}):", seed);
-                        println!("  GoldenPuzzle {{");
-                        println!("      n: 4,");
-                        println!("      desc: \"{}\",", desc);
-                        println!("      solutions: 1,");
-                        println!("      difficulty: Some(DifficultyTier::Easy),");
-                        println!("      tier_required: Some(DeductionTier::Easy),");
-                        println!("      solution: Some(&[{}]),", grid);
-                        println!("      label: \"4x4 Easy-tier puzzle with cages (seed {})\",", seed);
-                        println!("  }},");
-                        println!();
+            println!("Found 4x4 Easy-tier puzzle (seed {}):", seed);
+            println!("  GoldenPuzzle {{");
+            println!("      n: 4,");
+            println!("      desc: \"{}\",", desc);
+            println!("      solutions: 1,");
+            println!("      difficulty: Some(DifficultyTier::Easy),");
+            println!("      tier_required: Some(DeductionTier::Easy),");
+            println!("      solution: Some(&[{}]),", grid);
+            println!(
+                "      label: \"4x4 Easy-tier puzzle with cages (seed {})\",",
+                seed
+            );
+            println!("  }},");
+            println!();
 
             easy_count += 1;
             if easy_count >= target_count_4x4 {

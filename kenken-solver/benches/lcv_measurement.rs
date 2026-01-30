@@ -13,8 +13,8 @@
 //! - Vary puzzle complexity to see when backtracking dominates
 //! - Estimate portfolio impact from observed backtracking frequency
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use kenken_core::{Puzzle, Cage, CellId, rules::Op, rules::Ruleset};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use kenken_core::{Cage, CellId, Puzzle, rules::Op, rules::Ruleset};
 use kenken_solver::solve_one_with_stats;
 use smallvec::smallvec;
 
@@ -80,9 +80,11 @@ fn benchmark_baseline_trivial(c: &mut Criterion) {
         let puzzle = create_trivial_puzzle(*n);
         let rules = Ruleset::keen_baseline();
 
-        group.bench_with_input(BenchmarkId::from_parameter(format!("{}x{}", n, n)), n, |b, _| {
-            b.iter(|| solve_one_with_stats(&puzzle, rules))
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(format!("{}x{}", n, n)),
+            n,
+            |b, _| b.iter(|| solve_one_with_stats(&puzzle, rules)),
+        );
     }
 
     group.finish();
@@ -97,9 +99,11 @@ fn benchmark_mixed_puzzles(c: &mut Criterion) {
         let puzzle = create_mixed_puzzle(*n);
         let rules = Ruleset::keen_baseline();
 
-        group.bench_with_input(BenchmarkId::from_parameter(format!("{}x{}", n, n)), n, |b, _| {
-            b.iter(|| solve_one_with_stats(&puzzle, rules))
-        });
+        group.bench_with_input(
+            BenchmarkId::from_parameter(format!("{}x{}", n, n)),
+            n,
+            |b, _| b.iter(|| solve_one_with_stats(&puzzle, rules)),
+        );
     }
 
     group.finish();

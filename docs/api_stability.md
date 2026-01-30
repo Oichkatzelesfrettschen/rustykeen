@@ -1,6 +1,6 @@
 # API Stability Policy
 
-Last updated: 2026-01-01
+Last updated: 2026-01-29
 
 ## Version Status
 
@@ -167,6 +167,54 @@ These changes are **not** considered breaking:
 1.2.0  -> MSRV bump
 2.0.0  -> Breaking API change
 ```
+
+## Compatibility Matrix
+
+### Rust Version Support
+
+Post-v1.0, the minimum supported Rust version (MSRV) will be documented.
+Currently nightly-2026-01-01 is required.
+
+| Rust Version | Status |
+|--------------|--------|
+| nightly-2026-01-01+ | Required (current) |
+| Post-v1.0 MSRV | TBD (will be latest stable at v1.0) |
+| Older versions | Not supported |
+
+### Platform Support Tiers
+
+| Platform | Tier | Tested | Notes |
+|----------|------|--------|-------|
+| x86_64-unknown-linux-gnu | 1 | Yes | Primary development |
+| aarch64-unknown-linux-gnu | 1 | Yes | ARM Linux support |
+| x86_64-apple-darwin | 2 | Builds | Macintosh Intel |
+| aarch64-apple-darwin | 2 | Builds | Apple Silicon |
+| x86_64-pc-windows-msvc | 2 | Builds | Windows native |
+| aarch64-linux-android | 2 | Builds | Android arm64 |
+| wasm32-unknown-unknown | 2 | Builds | WebAssembly |
+| Other targets | 3 | N/A | Best effort only |
+
+### Feature Combinations
+
+Officially supported feature combinations:
+
+- No features (defaults only) - Stable
+- `core-bitvec` - Stable
+- `solver-dlx` - Stable
+- `sat-varisat` - Stable
+- `gen-dlx` + `parallel-rayon` - Stable
+- Any combination of stable features - Stable
+- Unstable features with stable features - Supported but behavior may change
+
+### Library Version Compatibility
+
+| Dependency | Constraint | Rationale |
+|------------|-----------|-----------|
+| Rust | nightly-2026-01-01+ | Requires latest nightly |
+| rand_chacha | 0.9 | Reproducible RNG |
+| smallvec | workspace defined | Core type |
+| thiserror | workspace defined | Error handling |
+| tracing | workspace defined | Instrumentation |
 
 ## Contact
 

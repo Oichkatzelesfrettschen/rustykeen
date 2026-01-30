@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KenKen WASM Solver Demo (2026)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .control-section {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #5568d3;
+        }
+        .button:active {
+            transform: scale(0.98);
+        }
+        .result-section {
+            background: #f0f7ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            display: none;
+        }
+        .result-section.visible {
+            display: block;
+        }
+        .result-section h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .result-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .result-table td:first-child {
+            font-weight: bold;
+            width: 30%;
+            color: #555;
+        }
+        .result-table td:last-child {
+            color: #333;
+            font-family: monospace;
+        }
+        .solution-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 50px);
+            gap: 2px;
+            margin-top: 10px;
+        }
+        .solution-cell {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #ddd;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .status-line {
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            color: #2e7d32;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .status-line.visible {
+            display: block;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            border-left-color: #e53935;
+        }
+        .info {
+            font-size: 13px;
+            color: #666;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧩 KenKen WASM Solver</h1>
+        <p class="subtitle">Demonstrates modern WASM serialization using opaque handles and serde_wasm_bindgen (2025-2026 best practices)</p>
+
+        <div class="control-section">
+            <h3>Puzzle Operations</h3>
+            <button class="button" onclick="createAndSolve()">Create & Solve Test Puzzle (4x4)</button>
+            <button class="button" onclick="getLibraryInfo()">Get Library Info</button>
+            <button class="button" onclick="healthCheck()">Health Check</button>
+            <button class="button" onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div id="status" class="status-line"></div>
+        <div id="results" class="result-section"></div>
+
+        <div class="info">
+            <strong>Architecture:</strong> This demo uses the opaque handle pattern - the WASM library stores puzzles in Rust memory and returns numeric handles. This avoids expensive serialization/deserialization and is the 2025-2026 best practice for WASM-JavaScript interop.
+            <br><br>
+            <strong>API Flow:</strong>
+            <ol>
+                <li><code>create_test_puzzle()</code> → returns handle (u32)</li>
+                <li><code>solve_puzzle_handle(handle)</code> → returns solution JSON</li>
+                <li><code>free_puzzle(handle)</code> → cleanup (optional in this demo)</li>
+            </ol>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import WASM module (after build with wasm-pack)
+        // In production: import init, * as wasm from './pkg/kenken_wasm.js';
+        let wasm = null;
+
+        // For demo purposes, create mock functions
+        const mockWasm = {
+            create_test_puzzle: () => Math.floor(Math.random() * 1000),
+            solve_puzzle_handle: (handle) => ({
+                success: true,
+                solution: [1, 2, 3, 4, 2, 1, 4, 3, 3, 4, 1, 2, 4, 3, 2, 1],
+                assignments: 16,
+                nodes_visited: 42,
+                max_depth: 4,
+                backtracked: false,
+                error: null
+            }),
+            free_puzzle: (handle) => true,
+            get_info: () => ({
+                name: "kenken-wasm",
+                version: "0.0.0",
+                api_version: "2.0",
+                strategy: "opaque_handles_with_serde_wasm_bindgen",
+                supported_sizes: [2, 3, 4, 5, 6, 7, 8, 9],
+                features: {
+                    solver: true,
+                    opaque_handles: true,
+                    efficient_serialization: true,
+                    statistics: true
+                }
+            }),
+            health_check: () => "OK"
+        };
+
+        window.createAndSolve = async function() {
+            try {
+                showStatus("Creating test puzzle...", false);
+                const w = wasm || mockWasm;
+
+                // Step 1: Create test puzzle (returns opaque handle)
+                const handle = w.create_test_puzzle();
+                showStatus(`Puzzle created with handle: ${handle}`, false);
+
+                // Step 2: Solve the puzzle
+                const result = typeof w.solve_puzzle_handle === 'function'
+                    ? w.solve_puzzle_handle(handle)
+                    : w.solve_puzzle_handle(handle);
+
+                // Handle both JS objects and JSON strings
+                const solveResult = typeof result === 'string' ? JSON.parse(result) : result;
+
+                // Step 3: Display results
+                displayResults(solveResult, handle);
+
+                // Step 4: Cleanup (optional)
+                if (w.free_puzzle) w.free_puzzle(handle);
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, true);
+            }
+        };
+
+        window.getLibraryInfo = async function() {
+            try {
+                const w = wasm || mockWasm;
+                const info = w.get_info();
+                const infoObj = typeof info === 'string' ? JSON.parse(info) : info;
+                displayInfo(infoObj);
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, true);
+            }
+        };
+
+        window.healthCheck = async function() {
+            try {
+                const w = wasm || mockWasm;
+                const status = w.health_check();
+                showStatus(`Health check: ${status}`, false);
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, true);
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('results').classList.remove('visible');
+            document.getElementById('status').innerHTML = '';
+            document.getElementById('status').classList.remove('visible');
+        };
+
+        function showStatus(message, isError) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.classList.toggle('visible', true);
+            statusEl.classList.toggle('error', isError);
+        }
+
+        function displayResults(result, handle) {
+            const resultsEl = document.getElementById('results');
+            if (!result.success) {
+                resultsEl.innerHTML = `<h3>❌ Solve Failed</h3><p>${result.error || 'Unknown error'}</p>`;
+                resultsEl.classList.toggle('visible', true);
+                return;
+            }
+
+            const gridHtml = result.solution
+                ? `<div class="solution-grid">${result.solution.map(v => `<div class="solution-cell">${v}</div>`).join('')}</div>`
+                : '';
+
+            resultsEl.innerHTML = `
+                <h3>✅ Puzzle Solved!</h3>
+                <table class="result-table">
+                    <tr><td>Handle:</td><td>${handle}</td></tr>
+                    <tr><td>Grid Size:</td><td>4x4 (16 cells)</td></tr>
+                    <tr><td>Assignments:</td><td>${result.assignments}</td></tr>
+                    <tr><td>Nodes Visited:</td><td>${result.nodes_visited}</td></tr>
+                    <tr><td>Max Depth:</td><td>${result.max_depth}</td></tr>
+                    <tr><td>Backtracked:</td><td>${result.backtracked ? 'Yes' : 'No'}</td></tr>
+                </table>
+                <h4 style="margin-top: 15px;">Solution Grid:</h4>
+                ${gridHtml}
+            `;
+            resultsEl.classList.toggle('visible', true);
+        }
+
+        function displayInfo(info) {
+            const resultsEl = document.getElementById('results');
+            resultsEl.innerHTML = `
+                <h3>📊 Library Information</h3>
+                <table class="result-table">
+                    <tr><td>Name:</td><td>${info.name}</td></tr>
+                    <tr><td>Version:</td><td>${info.version}</td></tr>
+                    <tr><td>API Version:</td><td>${info.api_version || 'N/A'}</td></tr>
+                    <tr><td>Strategy:</td><td><code>${info.strategy || 'N/A'}</code></td></tr>
+                    <tr><td>Supported Sizes:</td><td>${info.supported_sizes.join(', ')}</td></tr>
+                    <tr><td>Features:</td><td>${Object.entries(info.features || {}).map(([k, v]) => `${k}: ${v ? '✓' : '✗'}`).join('<br>')}</td></tr>
+                </table>
+            `;
+            resultsEl.classList.toggle('visible', true);
+        }
+
+        // Initialize
+        showStatus('Ready! (Using mock WASM for demo - real WASM would be loaded here)', false);
+    </script>
+</body>
+</html>

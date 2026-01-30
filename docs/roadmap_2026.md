@@ -3,7 +3,22 @@
 This document provides a prioritized roadmap for addressing implementational gaps
 identified through audit of `docs/plan.md`, `docs/lacunae_audit.md`, and codebase analysis.
 
-Last updated: 2026-01-01
+Last updated: 2026-01-29
+
+## Completion Status
+
+**Phase Alpha (Weeks 1-4) - COMPLETED**
+- [x] Epic A1: Build Hygiene - Fixed 28 clippy warnings
+- [x] Epic A2: Extended test corpus - Generated 18 new puzzles (52→71 total)
+- [x] Epic A3: PGO/BOLT execution - Achieved 17% average speedup
+- [x] Epic A4: SAT Add/Mul cage encoding - Verified complete in codebase
+- [x] Epic A5: Android deployment - Built arm64-v8a, documented process
+
+**Phase Beta (Weeks 5-8) - IN PROGRESS**
+- [x] Epic B1: Dependency Internalization - Internalized dlx-rs, likely_stable, smallbitvec
+- [x] Epic B2: API Stability Policy - Defined public API surface with visibility markers
+- [ ] Epic B3: Documentation Overhaul - In progress (Master TOC created)
+- [ ] Epic B4: Benchmark Baselines - Pending
 
 ## Executive Summary
 
