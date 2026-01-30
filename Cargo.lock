@@ -1146,6 +1146,7 @@ version = "0.0.0"
 dependencies = [
  "cairo-rs",
  "gdk4",
+ "glib",
  "gtk4",
  "kenken-core",
  "kenken-solver",

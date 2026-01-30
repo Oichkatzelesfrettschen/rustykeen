@@ -10,6 +10,7 @@ gtk4 = "0.9"
 cairo-rs = "0.20"
 pango = "0.20"
 gdk4 = "0.9"
+glib = "0.20"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
