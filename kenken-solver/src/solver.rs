@@ -7,7 +7,7 @@
 //!
 //! Feature flags:
 //! - `tracing`: enables `tracing::trace!` in hot paths (no subscriber required by the library).
-//! - `perf-likely`: enables branch prediction hints via `likely_stable`.
+//! - `perf-likely`: enables branch prediction hints via `kenken_core::hints`.
 //! - `alloc-bumpalo`: uses `bumpalo` scratch arenas for propagation temporaries.
 //!
 use kenken_core::rules::{Op, Ruleset};
@@ -1766,6 +1766,23 @@ fn enumerate_cage_tuples_collect_bump(
 }
 
 #[cfg(not(feature = "alloc-bumpalo"))]
+#[derive(Clone, Copy)]
+struct RunningTotals {
+    sum: i32,
+    prod: i32,
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
+struct TupleEnumCtx<'a> {
+    cage: &'a Cage,
+    cells: &'a [usize],
+    coords: &'a [(usize, usize)],
+    domains: &'a [u64],
+    per_pos: &'a mut [u64],
+    any_mask: &'a mut u64,
+}
+
+#[cfg(not(feature = "alloc-bumpalo"))]
 #[allow(clippy::too_many_arguments)]
 #[instrument(skip(cage, cells, coords, domains, chosen, per_pos, any_mask), fields(op = ?cage.op, pos, cells_len = cells.len()), level = "debug")]
 fn enumerate_cage_tuples(
@@ -1778,93 +1795,70 @@ fn enumerate_cage_tuples(
     per_pos: &mut [u64],
     any_mask: &mut u64,
 ) {
-    // Phase 6.1 optimization: Use running sum/product instead of recomputing from scratch
-    enumerate_cage_tuples_impl(
-        cage, cells, coords, domains, pos, chosen, per_pos, any_mask,
-        0i32, // running_sum (initialized to 0)
-        1i32, // running_prod (initialized to 1)
-    );
+    let mut ctx = TupleEnumCtx {
+        cage,
+        cells,
+        coords,
+        domains,
+        per_pos,
+        any_mask,
+    };
+    enumerate_cage_tuples_impl(&mut ctx, pos, chosen, RunningTotals { sum: 0, prod: 1 });
 }
 
 #[cfg(not(feature = "alloc-bumpalo"))]
 #[inline]
 fn enumerate_cage_tuples_impl(
-    cage: &Cage,
-    cells: &[usize],
-    coords: &[(usize, usize)],
-    domains: &[u64],
+    ctx: &mut TupleEnumCtx<'_>,
     pos: usize,
     chosen: &mut Vec<u8>,
-    per_pos: &mut [u64],
-    any_mask: &mut u64,
-    running_sum: i32,  // Phase 6.1: accumulated sum
-    running_prod: i32, // Phase 6.1: accumulated product
+    running: RunningTotals,
 ) {
-    if pos == cells.len() {
-        // Phase 6.1: Use running values instead of recomputing
-        if cage_tuple_satisfies_with_values(cage, chosen, running_sum, running_prod) {
+    if pos == ctx.cells.len() {
+        if cage_tuple_satisfies_with_values(ctx.cage, chosen, running.sum, running.prod) {
             for (i, &v) in chosen.iter().enumerate() {
-                per_pos[i] |= 1u64 << (v as u32);
-                *any_mask |= 1u64 << (v as u32);
+                ctx.per_pos[i] |= 1u64 << (v as u32);
+                *ctx.any_mask |= 1u64 << (v as u32);
             }
         }
         return;
     }
 
-    let idx = cells[pos];
-    for v in domain_iter(domains[idx]) {
-        if violates_in_cage_rowcol(coords, chosen, pos, v) {
+    let idx = ctx.cells[pos];
+    for v in domain_iter(ctx.domains[idx]) {
+        if violates_in_cage_rowcol(ctx.coords, chosen, pos, v) {
             continue;
         }
         chosen.push(v);
 
-        if cage.op == Op::Add {
-            // Phase 6.1: Use running_sum + v instead of recomputing entire sum
-            let new_sum = running_sum + (v as i32);
-            if new_sum <= cage.target {
+        if ctx.cage.op == Op::Add {
+            let new_sum = running.sum + (v as i32);
+            if new_sum <= ctx.cage.target {
                 enumerate_cage_tuples_impl(
-                    cage,
-                    cells,
-                    coords,
-                    domains,
+                    ctx,
                     pos + 1,
                     chosen,
-                    per_pos,
-                    any_mask,
-                    new_sum, // Pass incremental sum
-                    1,       // product not used for Add
+                    RunningTotals {
+                        sum: new_sum,
+                        prod: 1,
+                    },
                 );
             }
-        } else if cage.op == Op::Mul {
-            // Phase 6.1: Use running_prod * v instead of recomputing entire product
-            let new_prod = running_prod.saturating_mul(v as i32);
-            if new_prod != 0 && cage.target % new_prod == 0 {
+        } else if ctx.cage.op == Op::Mul {
+            let new_prod = running.prod.saturating_mul(v as i32);
+            if new_prod != 0 && ctx.cage.target % new_prod == 0 {
                 enumerate_cage_tuples_impl(
-                    cage,
-                    cells,
-                    coords,
-                    domains,
+                    ctx,
                     pos + 1,
                     chosen,
-                    per_pos,
-                    any_mask,
-                    0,        // sum not used for Mul
-                    new_prod, // Pass incremental product
+                    RunningTotals {
+                        sum: 0,
+                        prod: new_prod,
+                    },
                 );
             }
         } else {
-            enumerate_cage_tuples_impl(
-                cage,
-                cells,
-                coords,
-                domains,
-                pos + 1,
-                chosen,
-                per_pos,
-                any_mask,
-                running_sum, // Pass through for other operations
-                running_prod,
-            );
+            enumerate_cage_tuples_impl(ctx, pos + 1, chosen, running);
         }
 
         chosen.pop();

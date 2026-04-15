@@ -35,6 +35,7 @@ We intentionally separate:
 - **tuned artifacts** (may require newer CPUs / extra ISA features).
 
 See `docs/target_matrix.md` for the recommended target tiers and the pitfalls of compiling everything as “v3”.
+For reproducible ISA-tier build/benchmark publication, use `docs/isa_benchmark_artifact_registry.md`.
 
 ## PGO (profile guided optimization)
 Use `scripts/pgo.sh`:

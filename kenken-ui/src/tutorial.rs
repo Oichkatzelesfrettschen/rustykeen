@@ -50,14 +50,12 @@ impl Lesson {
                     number: 1,
                     instruction: "Look at row 0 (top row). It has cells (0,0) and (0,1)."
                         .to_string(),
-                    explanation: "In a 2x2 grid, each row must have digits 1 and 2."
-                        .to_string(),
+                    explanation: "In a 2x2 grid, each row must have digits 1 and 2.".to_string(),
                     hint: Some("Count how many unique values can go in each cell".to_string()),
                 },
                 LessonStep {
                     number: 2,
-                    instruction: "Column 0 (left column) has cells (0,0) and (1,0)."
-                        .to_string(),
+                    instruction: "Column 0 (left column) has cells (0,0) and (1,0).".to_string(),
                     explanation: "Just like rows, columns must also have each digit 1-2."
                         .to_string(),
                     hint: Some("Try placing 1 at (0,0). What must go in (1,0)?".to_string()),
@@ -74,8 +72,9 @@ impl Lesson {
                     number: 4,
                     instruction: "Then (0,1) must be 2 and (1,1) must be 1 (row constraints)."
                         .to_string(),
-                    explanation: "Row 0 needs both 1 and 2. Since (0,0)=1, (0,1)=2. Same logic for row 1."
-                        .to_string(),
+                    explanation:
+                        "Row 0 needs both 1 and 2. Since (0,0)=1, (0,1)=2. Same logic for row 1."
+                            .to_string(),
                     hint: None,
                 },
             ],
@@ -134,8 +133,7 @@ impl Lesson {
         Lesson {
             id: 3,
             title: "Deduction Strategies".to_string(),
-            objective: "Learn techniques to deduce values without guessing"
-                .to_string(),
+            objective: "Learn techniques to deduce values without guessing".to_string(),
             grid_size: 4,
             puzzle_desc: "a___,a___,a___,a___".to_string(),
             solution: vec![1, 2, 3, 4, 2, 1, 4, 3, 3, 4, 1, 2, 4, 3, 2, 1],
@@ -144,25 +142,27 @@ impl Lesson {
                     number: 1,
                     instruction: "Naked single: if cell can only be one value, place it."
                         .to_string(),
-                    explanation: "Apply row, column, and cage constraints to eliminate possibilities."
-                        .to_string(),
+                    explanation:
+                        "Apply row, column, and cage constraints to eliminate possibilities."
+                            .to_string(),
                     hint: Some("Count which digits are already in the row and column".to_string()),
                 },
                 LessonStep {
                     number: 2,
-                    instruction: "Hidden single: if only one cell in a unit can have a value, place it."
-                        .to_string(),
+                    instruction:
+                        "Hidden single: if only one cell in a unit can have a value, place it."
+                            .to_string(),
                     explanation: "Scan the row/column and find where each missing digit can go."
                         .to_string(),
-                    hint: Some("For each missing digit in row 0, count valid placements"
-                        .to_string()),
+                    hint: Some(
+                        "For each missing digit in row 0, count valid placements".to_string(),
+                    ),
                 },
                 LessonStep {
                     number: 3,
                     instruction: "Cage constraints reduce possibilities quickly in 4x4."
                         .to_string(),
-                    explanation: "Large cages (3+ cells) have few valid combinations."
-                        .to_string(),
+                    explanation: "Large cages (3+ cells) have few valid combinations.".to_string(),
                     hint: None,
                 },
                 LessonStep {
@@ -361,10 +361,10 @@ impl TutorialProgress {
 
     /// Complete current lesson.
     pub fn complete_lesson(&mut self) {
-        if let Some(id) = self.current {
-            if !self.completed.contains(&id) {
-                self.completed.push(id);
-            }
+        if let Some(id) = self.current
+            && !self.completed.contains(&id)
+        {
+            self.completed.push(id);
         }
         self.current = None;
         self.current_step = 1;

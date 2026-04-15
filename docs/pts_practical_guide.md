@@ -559,46 +559,11 @@ phoronix-test-suite benchmark pts/kenken-solver --runs 10
 
 ---
 
-## Phase 8: Integration with CI/CD (Optional)
+## Phase 8: Local Benchmark Automation (Optional)
 
-### Step 8.1: GitHub Actions Workflow
-
-Create `.github/workflows/benchmark.yml`:
-
-```yaml
-name: KenKen Benchmark
-
-on:
-  release:
-    types: [published]
-
-jobs:
-  benchmark:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y phoronix-test-suite
-
-      - name: Setup PTS profile
-        run: |
-          mkdir -p ~/.phoronix-test-suite/test-profiles/pts/kenken-solver-1.0.0
-          cp pts-profile/* ~/.phoronix-test-suite/test-profiles/pts/kenken-solver-1.0.0/
-
-      - name: Run benchmark
-        run: |
-          phoronix-test-suite benchmark pts/kenken-solver \
-            --title "KenKen Solver ${{ github.ref_name }}" \
-            --run-count 5
-
-      - name: Upload results
-        run: |
-          phoronix-test-suite upload-result [result-id]
-          # Get result URL and post to release notes
-```
+Hosted GitHub Actions workflows are disabled in this repo. If you want repeatable
+PTS runs, prefer a local wrapper script or a manually triggered machine-local
+benchmark routine instead of a hosted workflow.
 
 ---
 

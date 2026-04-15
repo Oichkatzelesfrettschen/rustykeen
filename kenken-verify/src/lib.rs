@@ -46,11 +46,37 @@ pub fn count_solutions_up_to(puzzle: &kenken_core::Puzzle, limit: usize) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kenken_core::{Cage, CellId, rules::Op};
+
+    fn mk_cage(cells: &[u16], op: Op, target: i32) -> Cage {
+        Cage {
+            cells: cells.iter().copied().map(CellId).collect(),
+            op,
+            target,
+        }
+    }
 
     #[test]
-    fn test_verify_solution_stub() {
-        // Placeholder: Will be expanded with corpus tests
-        let result = verify_solution;
-        let _r = result;
+    fn test_verify_solution_accepts_valid_solution() {
+        let puzzle = kenken_core::Puzzle {
+            n: 2,
+            cages: vec![
+                mk_cage(&[0], Op::Eq, 1),
+                mk_cage(&[1], Op::Eq, 2),
+                mk_cage(&[2], Op::Eq, 2),
+                mk_cage(&[3], Op::Eq, 1),
+            ],
+        };
+        assert!(verify_solution(&puzzle, &[1, 2, 2, 1]).is_ok());
+    }
+
+    #[test]
+    fn test_count_solutions_limit_behavior() {
+        let puzzle = kenken_core::Puzzle {
+            n: 2,
+            cages: vec![mk_cage(&[0, 1], Op::Add, 3), mk_cage(&[2, 3], Op::Add, 3)],
+        };
+        assert_eq!(count_solutions_up_to(&puzzle, 1).unwrap(), 1);
+        assert_eq!(count_solutions_up_to(&puzzle, 2).unwrap(), 2);
     }
 }

@@ -9,7 +9,7 @@ It is intentionally opinionated and performance-aware, but **library-first**:
 - heavy dependencies are **opt-in** behind Cargo features
 - platform-specific choices (allocators, profilers, mobile logging) live in adapters
 
-For upstream links and crate-level summaries, see `docs/crate_audit_list.md` and `docs/deps/README.md`.
+For upstream links and crate-level summaries, see `docs/deps/README.md`.
 
 ## Status legend
 - `now`: integrated in code today (typically behind a feature)
@@ -31,7 +31,9 @@ For upstream links and crate-level summaries, see `docs/crate_audit_list.md` and
 - Upstream features: prefer `alloc`/`std` only; avoid `atomic` unless we prove it helps.
 - Status: `partial` (`BitDomain` exists; solver still uses `u32` masks)
 - Granular usage plan:
-  - Replace solver `u32` masks with `BitDomain` only if it beats a fixed-width integer mask on target sizes.
+  - Treat this as a decision point, not a guaranteed migration.
+  - Replace solver integer masks with `BitDomain` only if benchmarks show a real
+    win or it unlocks supported larger-domain behavior we actually want.
   - Use `iter_ones()`/`count_ones()` for candidate enumeration and MRV selection.
 
 ### `mimalloc`
@@ -186,7 +188,7 @@ For upstream links and crate-level summaries, see `docs/crate_audit_list.md` and
 
 ### `criterion`
 - Our gate: `bench-criterion` (planned)
-- Status: `planned`
+- Status: `now`
 - Granular usage plan:
   - Add microbenchmarks for tuple enumeration, SAT encoding, and solver propagation.
 
@@ -198,7 +200,7 @@ For upstream links and crate-level summaries, see `docs/crate_audit_list.md` and
 
 ### `varisat` / `z3`
 - Our gates: `sat-varisat` (now), `smt-z3` (planned)
-- Status: `varisat` is `now`, `z3` is `planned`
+- Status: `varisat` is `now`, `z3` is `partial`
 - Granular usage plan:
   - `varisat`: uniqueness verification and regression tests against enumeration.
   - `z3`: optional “certification” and cross-check harnesses.
@@ -211,13 +213,13 @@ For upstream links and crate-level summaries, see `docs/crate_audit_list.md` and
 
 ### `proptest` / `bolero`
 - Our gate: `fuzz` (planned)
-- Status: `planned`
+- Status: `partial`
 - Granular usage plan:
-  - Fuzz cage tuple enumeration and parser/serializer roundtrips.
+  - Keep expanding `proptest` where it already exists.
+  - Treat `bolero` as planned until it is actually wired.
 
 ### `nom`
 - Our gate: `io-nom` (planned)
 - Status: `planned`
 - Granular usage plan:
   - Ingest legacy corpora and convert into internal canonical formats.
-

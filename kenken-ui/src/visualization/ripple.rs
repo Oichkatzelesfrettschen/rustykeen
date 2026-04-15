@@ -1,7 +1,7 @@
 // Propagation ripple animation effects for visualizing constraint propagation
 
-use std::time::{Duration, Instant};
 use kenken_core::CellId;
+use std::time::{Duration, Instant};
 
 /// Single ripple emanating from a cell.
 #[derive(Debug, Clone)]
@@ -63,7 +63,7 @@ impl Ripple {
 
     /// Set intensity multiplier.
     pub fn set_intensity(&mut self, intensity: f64) {
-        self.intensity = intensity.max(0.0).min(1.0);
+        self.intensity = intensity.clamp(0.0, 1.0);
     }
 }
 
@@ -88,7 +88,13 @@ impl RippleAnimator {
     }
 
     /// Add ripple with custom parameters.
-    pub fn add_ripple_custom(&mut self, cell: CellId, duration: Duration, max_radius: f64, intensity: f64) {
+    pub fn add_ripple_custom(
+        &mut self,
+        cell: CellId,
+        duration: Duration,
+        max_radius: f64,
+        intensity: f64,
+    ) {
         let mut ripple = Ripple::new(cell, duration, max_radius);
         ripple.set_intensity(intensity);
         self.ripples.push(ripple);
@@ -136,7 +142,12 @@ pub struct RippleBurst {
 
 impl RippleBurst {
     /// Create burst with N concentric ripples.
-    pub fn new(center: CellId, ring_count: usize, base_duration: Duration, base_radius: f64) -> Self {
+    pub fn new(
+        center: CellId,
+        ring_count: usize,
+        base_duration: Duration,
+        base_radius: f64,
+    ) -> Self {
         let mut ripples = Vec::new();
 
         for i in 0..ring_count {
@@ -200,7 +211,7 @@ mod tests {
     fn ripple_progress() {
         let ripple = Ripple::new(CellId(0), Duration::from_millis(100), 80.0);
         let progress = ripple.progress();
-        assert!(progress >= 0.0 && progress <= 1.0);
+        assert!((0.0..=1.0).contains(&progress));
     }
 
     #[test]

@@ -18,7 +18,7 @@ This document establishes objective thresholds for regression detection across p
 ### Solve Time Regression (Primary Metric)
 
 **Threshold**: >5% slower than baseline
-**Baseline**: Recorded in `docs/benchmark_baselines_2026-01-29.md` for grid sizes 2x2-9x9
+**Baseline**: Recorded in `docs/research/benchmark_baselines_2026-01-29.md` for grid sizes 2x2-9x9
 **Measurement Tool**: `hyperfine` (100 runs per configuration)
 **Precision**: Median latency ±95% CI
 
@@ -347,7 +347,7 @@ for N in 2 3 4 5 6 8 9; do
 done > /tmp/baselines_$(date +%Y-%m-%d).txt
 ```
 
-Update `docs/benchmark_baselines_2026-01-29.md` with results.
+Update `docs/research/benchmark_baselines_2026-01-29.md` with results.
 
 ### 3. Record Memory Usage
 
@@ -366,7 +366,7 @@ Update `docs/benchmark_memory_2026-01-29.md` with results.
 ### 4. Commit Baseline Update
 
 ```bash
-git add docs/benchmark_baselines_2026-01-29.md docs/benchmark_memory_2026-01-29.md
+git add docs/research/benchmark_baselines_2026-01-29.md docs/benchmark_memory_2026-01-29.md
 git commit -m "docs: record performance baselines after Phase Alpha"
 git tag v0.1.0-alpha.1
 ```
@@ -382,7 +382,7 @@ git tag v0.1.0-alpha.1
 
 **Adjustment Steps**:
 1. Measure new baseline (5+ runs, average them)
-2. Update `docs/benchmark_baselines_2026-01-29.md` with new values
+2. Update `docs/research/benchmark_baselines_2026-01-29.md` with new values
 3. Document rationale in commit message
 4. Update this file's thresholds if needed
 5. Notify team of new baselines via CHANGELOG entry
@@ -443,7 +443,7 @@ Action:
 
 ## Related Documents
 
-- [docs/benchmark_baselines_2026-01-29.md](benchmark_baselines_2026-01-29.md) - Performance baselines
+- [docs/research/benchmark_baselines_2026-01-29.md](research/benchmark_baselines_2026-01-29.md) - Performance baselines
 - [docs/benchmark_memory_2026-01-29.md](benchmark_memory_2026-01-29.md) - Memory baselines
 - [docs/benchmark_generator_2026-01-29.md](benchmark_generator_2026-01-29.md) - Generator baselines
 - [docs/optimization_roadmap.md](optimization_roadmap.md) - Future optimization tiers

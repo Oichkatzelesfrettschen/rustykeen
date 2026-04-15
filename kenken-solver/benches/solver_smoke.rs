@@ -10,10 +10,11 @@
 //! Results are recorded in `docs/benchmark_baselines.md`.
 //! Run with `cargo bench --bench solver_smoke` to update.
 //!
-//! # Flamegraph Output
+//! # Profiling Notes
 //!
-//! CPU flamegraphs are generated to target/criterion/*/profile/flamegraph.svg
-//! for performance analysis and hotpath identification.
+//! Criterion timing results are produced by this bench.
+//! For CPU flamegraphs, use `cargo bench --bench profile_flames` with
+//! `cargo flamegraph` as documented in `benches/profile_flames.rs`.
 
 use std::hint::black_box;
 
@@ -23,7 +24,6 @@ use kenken_core::rules::Ruleset;
 use kenken_solver::{
     DeductionTier, count_solutions_up_to_with_deductions, solve_one_with_deductions,
 };
-use pprof::criterion::{Output, PProfProfiler};
 
 /// Puzzles from the golden corpus for benchmarking.
 fn benchmark_puzzles() -> Vec<(u8, &'static str, &'static str)> {
@@ -131,7 +131,7 @@ fn bench_deduction_tiers(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = Criterion::default();
     targets =
         bench_solve_one,
         bench_count_solutions,

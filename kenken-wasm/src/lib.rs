@@ -1,12 +1,12 @@
 #![doc = "WASM bindings for KenKen solver with opaque handle pattern"]
 
-use wasm_bindgen::prelude::*;
-use serde::{Serialize, Deserialize};
+use kenken_core::Puzzle;
+use kenken_solver::{Ruleset, solve_one_with_stats_dispatched};
+use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use lazy_static::lazy_static;
-use kenken_core::Puzzle;
-use kenken_solver::{solve_one_with_stats_dispatched, Ruleset};
+use wasm_bindgen::prelude::*;
 
 /// Result of solving a puzzle
 #[derive(Serialize, Deserialize, Clone)]
@@ -35,7 +35,7 @@ pub fn create_test_puzzle() -> u32 {
     // Create a 4x4 puzzle with all singleton cages (each cell is a 1-cell cage)
     let puzzle = Puzzle {
         n: 4,
-        cages: vec![],  // Empty cages for now - just tests the handle mechanism
+        cages: vec![], // Empty cages for now - just tests the handle mechanism
     };
 
     let handle = unsafe {
@@ -54,9 +54,11 @@ pub fn create_test_puzzle() -> u32 {
 #[wasm_bindgen]
 pub fn solve_puzzle_handle(handle: u32) -> Result<String, JsValue> {
     let puzzle = {
-        let store = PUZZLE_STORE.lock()
+        let store = PUZZLE_STORE
+            .lock()
             .map_err(|_| JsValue::from_str("Lock error"))?;
-        store.get(&handle)
+        store
+            .get(&handle)
             .ok_or_else(|| JsValue::from_str("Puzzle not found"))?
             .clone()
     };
@@ -113,7 +115,8 @@ pub fn solve_puzzle_handle(handle: u32) -> Result<String, JsValue> {
 /// Delete puzzle from store (cleanup)
 #[wasm_bindgen]
 pub fn free_puzzle(handle: u32) -> bool {
-    PUZZLE_STORE.lock()
+    PUZZLE_STORE
+        .lock()
         .ok()
         .and_then(|mut store| store.remove(&handle))
         .is_some()

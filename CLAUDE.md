@@ -136,7 +136,7 @@ Format: comma-separated row strings where letters indicate cage membership and n
 
 **Running Miri:**
 ```bash
-cargo +nightly-2026-01-01 miri test
+cargo +nightly-2026-04-06 miri test
 ```
 
 **Running Kani verification:**
@@ -429,4 +429,4 @@ See `docs/pts_practical_guide.md` for complete PTS integration documentation.
 1. **Cleanroom**: Avoid copying upstream sgt-puzzles code/constants directly; re-derive from behavior
 2. **No fast-math**: Keep floating-point semantics deterministic across platforms
 3. **Edition 2024**: Uses Rust edition 2024 with resolver = "3"
-4. **Nightly required**: Pinned to `nightly-2026-01-01` via `rust-toolchain.toml`
+4. **Nightly required**: Pinned to `nightly-2026-04-06` via `rust-toolchain.toml`

@@ -1,121 +1,9 @@
-# =============================================================================
-# RUST BUILD ARTIFACTS & DEPENDENCIES
-# =============================================================================
+# Rust build outputs
 /target/
-debug/
 **/*.rs.bk
-# Note: Cargo.lock is TRACKED for this workspace (binary crate + reproducible builds)
 
-# =============================================================================
-# PROFILING & BENCHMARKING DATA (PGO, BOLT, perf, flamegraph, etc.)
-# =============================================================================
-# PGO profiling artifacts
-*.profraw
-*.profdata
-pgo-data/
-pgo-profiles/
-
-# BOLT post-link optimization
-*.bolt
-*.bolt.fdata
-bolt-data/
-
-# perf and performance profiling
-perf.data
-perf.data.old
-perf.script
-perf-*.txt
-perf-*.out
-
-# Flamegraph artifacts
-flame*.svg
-flamegraph.svg
-/flamegraph/
-
-# Profiling output directories
-/kenken-profile/
-/kenken-bench/target/
-
-# Heap profiling
-dhat-heap.json
-massif.out.*
-cachegrind.out.*
-callgrind.out.*
-
-# =============================================================================
-# CORE DUMPS & CRASH ARTIFACTS
-# =============================================================================
-core
-core.*
-*.core
-vgcore.*
-
-# =============================================================================
-# IDE & EDITOR STATE
-# =============================================================================
-# Visual Studio Code
-.vscode/
-*.code-workspace
-
-# JetBrains IDEs
-.idea/
-*.iml
-*.ipr
-*.iws
-
-# Vim/Neovim
-*.swp
-*.swo
-*.swn
-*~
-.vim/
-
-# Emacs
-.emacs.d/
-*~
-\#*\#
-.#*
-
-# Sublime Text
-*.sublime-workspace
-*.sublime-project
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-*.pdb
-
-# clangd/ccls
-.clangd/
-.ccls-cache/
-compile_commands.json
-
-# =============================================================================
-# DEVELOPMENT & TOOLING
-# =============================================================================
-# Claude Code / AI assistants
-/.claude/
-/.mcp.json
-
-# Environment files
-.env
-.env.local
-.env.*.local
-.envrc
-
-# direnv
-.direnv/
-
-# =============================================================================
-# WORKSPACE CACHES & TEMPORARY FILES
-# =============================================================================
+# Local scratch and logs
+/.tmp/
 /logs/
 *.log
 *.tmp
@@ -123,32 +11,102 @@ compile_commands.json
 *.bak
 *.backup
 
-# Database files (temporary/test)
-*.db
-*.sqlite
-*.sqlite3
+# Profiling and optimization outputs
+*.profraw
+*.profdata
+/pgo-data/
+/pgo-profiles/
+*.bolt
+*.bolt.fdata
+perf.data
+perf.data.old
+perf.script
+perf-*.txt
+perf-*.out
+flame*.svg
+flamegraph.svg
+/flamegraph/
+dhat-heap.json
+massif.out.*
+cachegrind.out.*
+callgrind.out.*
 
-# =============================================================================
-# TEST ARTIFACTS & COVERAGE
-# =============================================================================
+# Durable artifacts are tracked under /artifacts when intentionally curated.
+# Keep local-only experiment output under ignored scratch locations instead.
+/artifacts/tmp/
+
+# Fuzzing
+/fuzz/artifacts/
+/fuzz/corpus/
+
+# Test and coverage outputs
 /coverage/
 *.lcov
 tarpaulin-report.html
 cobertura.xml
 test-results/
 test-output.txt
-
-# Mutation testing (cargo-mutants)
 **/mutants.out/
 **/mutants.out.*
 
-# Fuzzing
-/fuzz/artifacts/
-/fuzz/corpus/
+# Docs builds
+/docs/build/
+/docs/_build/
+/docs/.doctrees/
+/site/
+/doc/
 
-# =============================================================================
-# BINARY ARTIFACTS
-# =============================================================================
+# Local upstream study caches
+/third_party/upstream/
+/third_party/crate_docs/
+/external/
+
+# IDE and editor state
+.vscode/
+*.code-workspace
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*.swn
+*~
+.vim/
+.emacs.d/
+\#*\#
+.#*
+*.sublime-workspace
+*.sublime-project
+
+# OS-specific noise
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.pdb
+
+# Language and tool caches
+.clangd/
+.ccls-cache/
+compile_commands.json
+/.claude/
+/.mcp.json
+.env
+.env.local
+.env.*.local
+.envrc
+.direnv/
+node_modules/
+package-lock.json
+
+# Databases and binary outputs
+*.db
+*.sqlite
+*.sqlite3
 *.o
 *.a
 *.so
@@ -158,37 +116,7 @@ test-output.txt
 *.exe
 *.out
 
-# =============================================================================
-# DOCUMENTATION BUILDS
-# =============================================================================
-/docs/build/
-/docs/_build/
-/docs/.doctrees/
-site/
-
-# cargo doc output (usually in target/)
-/doc/
-
-# =============================================================================
-# UPSTREAM & EXTERNAL ARTIFACTS
-# =============================================================================
-/third_party/
-/external/
-/vendor/
-
-# =============================================================================
-# PACKAGE MANAGER ARTIFACTS
-# =============================================================================
-# npm (if using wasm-pack or similar)
-node_modules/
-package-lock.json
-
-# =============================================================================
-# MISCELLANEOUS
-# =============================================================================
-# Backup files
+# Patch and merge leftovers
 *.orig
 *.rej
-
-# Sample/template files that shouldn't be committed
 Cargo.*.sample.toml

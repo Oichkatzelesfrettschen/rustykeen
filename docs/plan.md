@@ -202,17 +202,17 @@ Optional verification layers:
 
 ## 9) Build system and repo hygiene
 
-Immediate repo-level lacunae to address (recommended):
-- Add a real `Cargo.toml` workspace (or a single crate) so the repo builds.
-- Add `rust-toolchain.toml` to pin nightly and required components.
-- Add CI: `cargo fmt`, `cargo clippy`, `cargo test` on stable + nightly as appropriate.
-- Fix licensing file to contain the intended license text (current `LICENSE` is an HTML redirect).
+Bootstrap lacunae (historical; now closed in the current workspace):
+- Workspace `Cargo.toml` and crate layout are in place.
+- `rust-toolchain.toml` is pinned to `nightly-2026-04-06` with required components.
+- CI runs strict gates on the pinned nightly (`fmt`, `clippy`, `test` with `--all-features`).
+- Licensing files are populated (`LICENSE`, `LICENSE-MIT`).
 
-### 9.1) Quality gates (recommended defaults)
+### 9.1) Quality gates (current defaults)
 - `cargo fmt --check` (always)
-- `cargo clippy --all-targets --all-features` (tiered: allow feature-matrix expansion later)
-- `cargo test --all-targets` (with deterministic seeds)
-- `cargo test -F verification` (optional, can be allowed-to-fail initially)
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo test --all-targets --all-features` (with deterministic seeds)
+- Optional verify lane: `cargo test --test z3_golden_verify --features verify -- --ignored --nocapture` (currently non-blocking in CI)
 - `cargo bench` (nightly only if benches require unstable features)
 
 ## 10) Milestones (actionable)

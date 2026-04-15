@@ -1,11 +1,11 @@
 #![doc = "Control panel with solve button and solver statistics"]
 
 use gtk4::prelude::*;
-use gtk4::{Button, Label, Orientation, Box as GtkBox};
+use gtk4::{Box as GtkBox, Button, Label, Orientation};
+use kenken_core::Puzzle;
+use kenken_solver::{Ruleset, SolveStats, solve_one_with_stats_dispatched};
 use std::cell::RefCell;
 use std::rc::Rc;
-use kenken_core::Puzzle;
-use kenken_solver::{solve_one_with_stats_dispatched, Ruleset, SolveStats};
 
 /// Solver result with solution and statistics
 #[derive(Clone)]

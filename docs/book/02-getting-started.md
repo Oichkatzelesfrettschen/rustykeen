@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust 1.75+ (nightly-2026-01-01 pinned via rust-toolchain.toml)
+- Rust nightly-2026-04-06 (pinned via rust-toolchain.toml)
 - cargo toolchain
 - For UI: GTK4 development libraries (libgtk-4-dev on Ubuntu)
 - For WASM: wasm-pack
@@ -20,8 +20,9 @@ cd rustykeen
 
 ```bash
 cargo build
-cargo test
-cargo clippy
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
 ```
 
 All tests should pass with zero warnings.
@@ -30,33 +31,30 @@ All tests should pass with zero warnings.
 
 ### Solve a Puzzle
 
-Solve a 4x4 puzzle using SGT (Simon Tatham's Puzzles) format:
+Solve a 2x2 puzzle using SGT (Simon Tatham's Puzzles) format:
 
 ```bash
-cargo run -p kenken-cli -- solve --n 4 --desc "b__,a3a3" --tier normal
+cargo run -p kenken-cli --bin kenken-cli -- solve --n 2 --desc "b__,a3a3" --tier normal
 ```
 
 Parameters:
-- `--n`: Grid size (2-32)
+- `--n`: Grid size for SGT `--desc` input (1-16; parser-constrained)
 - `--desc`: Puzzle description in SGT format
 - `--tier`: Deduction tier (none, easy, normal, hard)
 
 Output:
 ```
-Success: true
-Solution: [1, 2, 3, 4, 2, 1, 4, 3, 3, 4, 1, 2, 4, 3, 2, 1]
-Assignments: 16
-Nodes Visited: 42
-Max Depth: 4
-Backtracked: false
+n=2
+1 2
+2 1
 ```
 
-### Generate Puzzles
+### Benchmark Throughput
 
-Generate 10 random 4x4 puzzles:
+Run a quick throughput benchmark (supports n=2..32):
 
 ```bash
-cargo run -p kenken-cli -- generate --n 4 --count 10 --tier normal
+cargo run -p kenken-cli --bin kenken-cli -- benchmark --n 4 --count 10 --tier normal
 ```
 
 ### Count Solutions
@@ -64,7 +62,7 @@ cargo run -p kenken-cli -- generate --n 4 --count 10 --tier normal
 Verify puzzle uniqueness by counting solutions:
 
 ```bash
-cargo run -p kenken-cli -- count --n 4 --desc "..." --limit 2
+cargo run -p kenken-cli --bin kenken-cli -- count --n 2 --desc "b__,a3a3" --limit 2
 ```
 
 Result "1" means unique puzzle, "2" means ambiguous.
@@ -79,7 +77,7 @@ Example: `b__,a3a3` for 2x2 grid
 - `b` = block type (removed edges)
 - `__,a3a3` = clues for cages
 
-See `kenken-core/src/sgt.rs` for full format specification.
+See `kenken-core/src/format/sgt_desc.rs` for full format specification.
 
 ## Building WASM
 
@@ -143,21 +141,25 @@ Common features:
 Run full test suite:
 
 ```bash
-# Unit tests
-cargo test --all-targets
+# Canonical local gate
+just ci
+
+# Full local test suite
+just test
 
 # Integration tests
-cargo test --test corpus_golden
-cargo test --test corpus_difficulty
+cargo test -p kenken-solver --test corpus_golden
+cargo test -p kenken-solver --test corpus_difficulty
 
 # Property tests
-cargo test --features proptest
+cargo test -p kenken-core --test prop_cage_semantics
 
 # Formal verification
 cargo kani --tests
 
 # Fuzz testing
-cargo fuzz run solver_fuzz
+cargo fuzz run fuzz_solver
+cargo fuzz run fuzz_sgt_desc_parser
 ```
 
 ## Next Steps
@@ -175,7 +177,7 @@ cargo fuzz run solver_fuzz
 If you see clippy warnings, ensure you have the nightly toolchain:
 
 ```bash
-rustup update nightly-2026-01-01
+rustup update nightly-2026-04-06
 ```
 
 ### WASM Build Fails

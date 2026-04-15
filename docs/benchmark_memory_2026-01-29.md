@@ -199,7 +199,7 @@ Trigger investigation if actual exceeds recommended by >20%.
 
 ## Related Documents
 
-- [docs/benchmark_baselines_2026-01-29.md](benchmark_baselines_2026-01-29.md) - Solver timing baselines
+- [docs/research/benchmark_baselines_2026-01-29.md](research/benchmark_baselines_2026-01-29.md) - Solver timing baselines
 - [docs/regression_thresholds.md](regression_thresholds.md) - CI threshold definitions
 - [docs/optimization_roadmap.md](optimization_roadmap.md) - Memory optimization opportunities
 - [docs/PHASE5_PGO_ANALYSIS.md](PHASE5_PGO_ANALYSIS.md) - Performance analysis including memory

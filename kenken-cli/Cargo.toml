@@ -9,6 +9,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+clap.workspace = true
 kenken-core = { path = "../kenken-core", features = ["core-u64"] }
 kenken-solver = { path = "../kenken-solver" }
 # kenken-profile removed (crate does not exist)

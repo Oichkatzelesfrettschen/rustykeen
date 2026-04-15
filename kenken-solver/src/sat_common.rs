@@ -11,7 +11,7 @@
 
 #![allow(dead_code)]
 
-use varisat::{ExtendFormula, Lit, Solver, Var};
+use varisat::{ExtendFormula, Lit, Var};
 
 #[derive(Debug, Clone)]
 pub struct LatinVarMap {
@@ -20,11 +20,11 @@ pub struct LatinVarMap {
 }
 
 impl LatinVarMap {
-    pub fn new(solver: &mut Solver, n: usize) -> Self {
+    pub fn new(target: &mut impl ExtendFormula, n: usize) -> Self {
         let a = n * n;
         let mut vars = Vec::with_capacity(a * n);
         for _ in 0..(a * n) {
-            vars.push(solver.new_var());
+            vars.push(target.new_var());
         }
         Self { n, vars }
     }
@@ -53,7 +53,7 @@ impl LatinVarMap {
     /// - exactly one value per cell
     /// - row uniqueness
     /// - column uniqueness
-    pub fn add_latin_constraints(&self, solver: &mut Solver) {
+    pub fn add_latin_constraints(&self, target: &mut impl ExtendFormula) {
         let n = self.n;
 
         // Exactly one value per cell (pairwise at-most-one).
@@ -63,10 +63,10 @@ impl LatinVarMap {
                 for val0 in 0..n {
                     atleast.push(self.lit(row, col, val0));
                 }
-                solver.add_clause(&atleast);
+                target.add_clause(&atleast);
                 for v1 in 0..n {
                     for v2 in (v1 + 1)..n {
-                        solver.add_clause(&[self.nlit(row, col, v1), self.nlit(row, col, v2)]);
+                        target.add_clause(&[self.nlit(row, col, v1), self.nlit(row, col, v2)]);
                     }
                 }
             }
@@ -77,7 +77,7 @@ impl LatinVarMap {
             for val0 in 0..n {
                 for c1 in 0..n {
                     for c2 in (c1 + 1)..n {
-                        solver.add_clause(&[self.nlit(row, c1, val0), self.nlit(row, c2, val0)]);
+                        target.add_clause(&[self.nlit(row, c1, val0), self.nlit(row, c2, val0)]);
                     }
                 }
             }
@@ -88,14 +88,14 @@ impl LatinVarMap {
             for val0 in 0..n {
                 for r1 in 0..n {
                     for r2 in (r1 + 1)..n {
-                        solver.add_clause(&[self.nlit(r1, col, val0), self.nlit(r2, col, val0)]);
+                        target.add_clause(&[self.nlit(r1, col, val0), self.nlit(r2, col, val0)]);
                     }
                 }
             }
         }
     }
 
-    pub fn add_givens_or_unsat(&self, solver: &mut Solver, givens: &[u8]) -> bool {
+    pub fn add_givens_or_unsat(&self, target: &mut impl ExtendFormula, givens: &[u8]) -> bool {
         let n = self.n;
         let a = n * n;
         if givens.len() != a {
@@ -110,7 +110,7 @@ impl LatinVarMap {
                 if given as usize > n {
                     return false;
                 }
-                solver.add_clause(&[self.lit(row, col, given as usize - 1)]);
+                target.add_clause(&[self.lit(row, col, given as usize - 1)]);
             }
         }
         true

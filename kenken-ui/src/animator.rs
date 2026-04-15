@@ -98,7 +98,7 @@ impl Animator {
     ///
     /// Clamped to range [10, 2000] (10ms to 2 seconds).
     pub fn set_speed_millis(&mut self, millis: u64) {
-        self.speed_millis = millis.max(10).min(2000);
+        self.speed_millis = millis.clamp(10, 2000);
     }
 
     /// Get current speed in milliseconds per event.
@@ -353,19 +353,25 @@ mod tests {
     fn animator_looping() {
         let events = create_test_events();
         let mut animator = Animator::new(events);
+        let total_events = animator.total_events();
 
         animator.set_looping(true);
         assert!(animator.is_looping());
 
-        // Step through all events
-        while animator.step().is_some() {}
+        // Step through one full cycle and verify it wraps.
+        for _ in 0..total_events {
+            assert!(animator.step().is_some());
+        }
 
         // Should loop back to beginning
         assert_eq!(animator.current_index(), 0);
 
         animator.set_looping(false);
-        while animator.step().is_some() {}
+        for _ in 0..total_events {
+            assert!(animator.step().is_some());
+        }
         assert_eq!(animator.state(), PlaybackState::Finished);
+        assert!(animator.step().is_none());
     }
 
     #[test]

@@ -5,7 +5,10 @@ This repo is **library-first** and **cleanroom-driven**. Dependency policy:
 - Introduce “heavy” capabilities behind Cargo features.
 - Record a clear mapping: crate → purpose → feature gate → where used.
 
-For the aspirational 2026 stack list, see `docs/crates_audit.md` and `docs/dependency_matrix.md`.
+For the broader 2026 stack discussion, see `docs/crates_audit.md` and
+`docs/dependency_matrix.md`. Those documents now distinguish between adopted,
+partial, and planned crates; they are not a claim that every listed crate is
+integrated today.
 
 ## Workspace crates (current)
 - `kenken-core`
@@ -60,11 +63,15 @@ For the aspirational 2026 stack list, see `docs/crates_audit.md` and `docs/depen
 - Role: installs a default tracing subscriber so solver/SAT tracepoints are visible without custom wiring.
 - Usage: `kenken-cli/src/main.rs` `init_tracing()`.
 
-## Optional but currently unused in code
+## Partial integrations / decision debt
 
 ### `bitvec` (`kenken-core/core-bitvec`)
 - Role: bit-level candidate domains.
-- Current status: `kenken_core::BitDomain` exists; solver still uses `u32` masks.
+- Current status: `kenken_core::BitDomain` exists, but the main solver still uses
+  fixed-width integer masks.
+- Interpretation: this is architectural decision debt, not an automatic
+  “finish integration” backlog item.
+- Exit criteria live in `docs/canonical/bitvec_decision.md`.
 
 ### `static_assertions` (`kenken-core/perf-assertions`)
 - Role: compile-time layout checks for cache/ABI expectations.
@@ -74,6 +81,17 @@ For the aspirational 2026 stack list, see `docs/crates_audit.md` and `docs/depen
 
 ### `likely_stable` (`kenken-solver/perf-likely`)
 - Role: branch prediction hints in solver hot branches.
+
+### `mimalloc` (`kenken-cli/alloc-mimalloc`)
+- Role: CLI-only allocator optimization.
+- Current status: intentionally adapter-scoped, not a core-crate dependency policy.
+
+## Planned but not yet integrated
+
+- `anyhow` for richer adapter-edge error context
+- `nom` for any future broader parser ingestion lane
+- `parking_lot` / `dashmap` for concurrency-heavy cache scenarios
+- `rand_pcg`, `wide`, `bytemuck`, and related performance experiments
 
 ## Formatting / drift guardrails
 - `docs/features.md`: feature-gate rules and where they live.

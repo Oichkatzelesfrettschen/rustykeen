@@ -1,131 +1,72 @@
-# Audit and Lacunae Resolution
+# Final Consolidated Debt Register (Modernization Cycle)
 
-Last updated: 2026-01-01
+Last updated: 2026-04-06
 
-## Resolved Gaps (since 2025-12-31)
+This is the final cross-class debt register for the modernization cycle. It summarizes disposition and evidence without duplicating detailed analysis in `docs/dependency_audit.md` and `docs/adr/0005-major-upgrade-decision-record.md`.
+Session todo snapshot before publication: all modernization todos except this register were already marked `done` in the session tracker (evidence query listed below).
 
-### SAT Encoding (RESOLVED)
-- **Add/Mul cage tuple encoding**: Implemented via `add_tuple_allowlist()` with selector variables
-- **Threshold fallback**: `SAT_TUPLE_THRESHOLD = 512` with automatic fallback to native solver
-- **Full cage uniqueness proofs**: `puzzle_uniqueness_via_sat()` handles all cage types
-- **Tests**: 4 unit tests covering various scenarios
+## Evidence baseline
 
-### Difficulty Classification (RESOLVED)
-- **Tier-required classifier**: `classify_tier_required()` determines minimum deduction tier
-- **Backtracking detection**: `SolveStats.backtracked` tracks whether guessing occurred
-- **Upstream parity**: Matches sgt-puzzles approach (technique-based, not search-cost)
-- **Calibration corpus**: `corpus_difficulty.rs` with Easy-tier validation
+Commands executed from repo root for this final register:
 
-### Build Infrastructure (RESOLVED)
-- **Workspace**: Compiles with `cargo build --all-features`
-- **CI**: `fmt/clippy/test` gates in `.github/workflows/ci.yml`
-- **Toolchain**: Pinned to `nightly-2026-01-01`
-- **Fuzz harness**: `fuzz/fuzz_targets/` with parser and solver coverage
-- **LICENSE**: Valid GPLv2 text
+```bash
+# session progress evidence
+SELECT id, status FROM todos ORDER BY created_at;
 
-### Generator Pipeline (RESOLVED)
-- **Puzzle minimizer**: Implemented via `minimize_puzzle()` in `kenken-gen/src/minimizer.rs`
-  - Greedy cage merging algorithm preserves uniqueness
-  - Configurable via `MinimizeConfig` (rules, tier, max iterations)
-  - Returns `MinimizeResult` with before/after statistics
-- **Difficulty targeting**: Implemented via `generate_with_stats()` in `kenken-gen/src/generator.rs`
-  - `GenerateConfig.target_difficulty` specifies desired tier
-  - `GenerateConfig.difficulty_tolerance` allows +/- tier range
-  - Returns `GeneratedPuzzleWithStats` with full classification
-- **Tests**: 9 unit tests covering minimization and difficulty targeting
+# modernization validation evidence
+cargo audit
+cargo outdated --workspace --root-deps-only
+cargo outdated --workspace
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+./docs/literature/verify_corpus.sh
+```
 
-### Test Corpus (MOSTLY RESOLVED)
-- **Golden corpus**: 52 puzzles in `kenken-solver/tests/corpus_golden.rs`
-  - Grid sizes: 2x2, 3x3, 4x4, 5x5, 6x6 with verified solutions
-  - All puzzles have verified solutions and difficulty tiers
-  - 8 test functions covering parse, validate, solve, uniqueness, difficulty
-- **Normal/Hard tier puzzles**: Investigation complete (2026-01-01)
-  - **Finding**: Normal/Hard tier puzzles are extremely rare in random generation
-  - Scanned 1000 random 4x4 puzzle seeds: 0 Hard, 0 Normal found
-  - Most random puzzles are Easy-tier (singleton + simple row/col cages)
-  - Hard/Normal tiers require specific cage interaction patterns unlikely in random generation
-  - **Decision**: Focus on diverse Easy-tier puzzles with varied cage constraints
-  - **Status**: Will expand corpus with Easy-tier puzzles featuring Add/Mul/Sub/Div cages
+Primary evidence files:
 
-### Formal Verification (RESOLVED)
-- **Kani harnesses**: 15 proof harnesses implemented (2026-01-01)
-  - `kenken-core/src/puzzle.rs`: 5 proofs
-    - `cell_coord_roundtrip`: Bijection between cell IDs and coordinates
-    - `cell_index_bounds`: Index calculations always in bounds
-    - `cell_id_rejects_oob`: OOB coordinates correctly rejected
-    - `coord_rejects_oob`: OOB cell IDs correctly rejected
-    - `cellid_ordering_is_row_major`: Ordering matches row-major layout
-  - `kenken-solver/src/solver.rs`: 10 proofs
-    - `full_domain_has_n_bits`: Domain has exactly n bits set
-    - `place_sets_row_mask`/`place_sets_col_mask`: Place sets mask bits
-    - `unplace_clears_row_mask`/`unplace_clears_col_mask`: Unplace clears mask bits
-    - `place_unplace_roundtrip`: Place/unplace restores state
-    - `domain_excludes_placed_in_row`/`domain_excludes_placed_in_col`: Latin constraints
-    - `place_sets_grid_value`: Grid value matches placed digit
-- **Z3 certification**: Integrated into CI pipeline (2026-01-01)
-  - `kenken-solver/src/z3_verify.rs`: Z3-based uniqueness verification
-  - `kenken-solver/tests/z3_golden_verify.rs`: Golden corpus verification tests
-  - `.github/workflows/ci.yml`: Optional Z3 verification job (installs Z3, runs tests)
-  - Feature-gated via `verify` feature flag
+- `docs/dependency_audit.md`
+- `docs/adr/0005-major-upgrade-decision-record.md`
+- `docs/literature/README.md`, `docs/literature/sources.csv`, `docs/literature/provenance_manifest.csv`
+- `rust-toolchain.toml`, `Dockerfile`, `Cargo.lock`
+- `kenken-verify/src/z3_interface.rs`, `kenken-verify/src/sat_interface.rs`
+- `kenken-solver/src/z3_verify.rs`, `kenken-solver/src/sat_cages.rs`
 
-## Remaining Gaps
+## Consolidated debt register
 
-### Documentation (PARTIALLY RESOLVED)
-- **Benchmark baselines**: Recorded in `docs/benchmark_baselines.md` (2026-01-01)
-  - solve_one latencies: 207ns (2x2) to 1.03us (5x5)
-  - Deduction tier overhead: 97-199% vs None tier
-  - Regression thresholds defined
-- **API stability policy**: Documented in `docs/api_stability.md` (2026-01-01)
-  - Semver policy, public API definition, deprecation process
-  - Platform tiers, MSRV policy, feature flag stability
-- **Android integration**: No working example app despite UniFFI bindings.
-- **Propagation semantics**: Documented in `docs/propagation_semantics.md` (2026-01-01)
-  - Deduction tier descriptions and performance characteristics
-  - Cage-specific bounds (Add, Mul, Sub, Div, Eq)
-  - Domain representation and Latin constraint maintenance
-  - Tuple enumeration and fixpoint semantics
+| Debt class | Item | Disposition | Evidence references (files + commands) | Notes |
+|---|---|---|---|---|
+| Engineering | Strict all-feature quality gates are enforced in local validation | **Resolved** | `cargo fmt --check`; `cargo clippy --all-targets --all-features -- -D warnings`; `cargo test --all-targets --all-features` | Local gate discipline retained after CI/CD removal |
+| Engineering | CI/CD workflows are intentionally disabled to control account quota consumption | **Resolved** | `test ! -f .github/workflows/ci.yml`; `git status --short` | Hosted runner usage removed; local validation remains mandatory |
+| Architecture | ISA target guidance now includes a reproducible artifact/result registry | **Resolved** | `docs/isa_benchmark_artifact_registry.md`; `docs/target_matrix.md`; `rg -n "artifact registry|linux-x86-64-v1|linux-x86-64-v3|linux-aarch64-generic" docs/isa_benchmark_artifact_registry.md docs/target_matrix.md` | Registry now defines layout, metadata, and verification checks |
+| Design | Cross-target API parity contract (`kenken-uniffi` vs `kenken-wasm`) is formalized and regression-tested | **Resolved** | `docs/cross_target_api_parity_contract.md`; `kenken-wasm/tests/cross_target_api_parity_contract.rs`; `cargo test --all-targets --all-features` | Contract + drift checks are now part of the test suite |
+| Implementation | `kenken-verify` SAT/Z3 verification APIs now include CNF/SMT2 proof artifact export surfaces | **Resolved** | `kenken-verify/src/z3_interface.rs`; `kenken-verify/src/sat_interface.rs`; `rg -n "generate_cnf|generate_z3_smt2|CnfExportFailed|Smt2ExportFailed" kenken-verify/src/sat_interface.rs kenken-verify/src/z3_interface.rs` | Export API surface now supports external reproducible verification workflows |
+| Implementation | `z3_verify` now encodes full cage constraints (Eq/Add/Mul/Sub/Div) and checks alternate models | **Resolved** | `kenken-solver/src/z3_verify.rs`; `kenken-solver/tests/z3_golden_verify.rs`; `rg -n "Full cage arithmetic constraints|Op::Eq|Op::Add|Op::Mul|Op::Sub|Op::Div" kenken-solver/src/z3_verify.rs` | Removes prior vacuous-uniqueness risk in Z3 path |
+| Implementation | SAT verifier now supports strict fail-closed certification mode while preserving permissive fallback mode | **Resolved (strict) / Accepted (permissive)** | `kenken-solver/src/sat_cages.rs`; `rg -n "puzzle_uniqueness_via_sat_strict|SAT_TUPLE_THRESHOLD|native fallback" kenken-solver/src/sat_cages.rs` | Certification mode no longer depends on native fallback |
+| Toolchain/dependency/security | Toolchain pin normalization completed (`nightly-2026-04-06`) | **Resolved** | `rust-toolchain.toml:2`; `Dockerfile:4`; `rg -n "nightly-2026-04-06" rust-toolchain.toml Dockerfile README.md CONTRIBUTING.md` | Reproducibility baseline established |
+| Toolchain/dependency/security | RustSec + freshness debt cleared (`rkyv` on `0.8.15`, outdated checks clean) | **Resolved** | `docs/dependency_audit.md:31-33,136`; `Cargo.lock:1895-1896`; `cargo audit`; `cargo outdated --workspace --root-deps-only`; `cargo outdated --workspace` | Security/freshness debt closed for this cycle |
+| Toolchain/dependency/security | Criterion overlap consolidation completed (`criterion 0.8.2` only) | **Resolved** | `Cargo.lock:356-377`; `cargo tree -d --all-features`; `cargo tree -d --all-features | rg -n "criterion v0\\.8\\.2|criterion v0\\.5"` | Removes dual-major benchmark stack debt |
+| Toolchain/dependency/security | `varisat` upstream velocity remains low | **Accepted** | `docs/dependency_audit.md:51,123,142`; `cargo metadata --format-version 1 --all-features` | Monitor quarterly as supply-chain risk |
+| Toolchain/dependency/security | Literature/PDF provenance corpus now present and integrity-verifiable | **Resolved** | `docs/literature/README.md:23,42`; `docs/literature/sources.csv`; `docs/literature/provenance_manifest.csv`; `./docs/literature/verify_corpus.sh` | Closes prior provenance/evidence gap |
 
-### Solver Optimizations (RESOLVED/DOCUMENTED)
-- **BitDomain integration**: Analysis complete (2026-01-01):
-  - Solver uses `u32` bitmask (bits 1..=n) with SIMD-accelerated popcount
-  - This is **faster** than `BitDomain` (which uses heap-allocated `bitvec`)
-  - `BitDomain` remains available for external API use (N > 31) via `core-bitvec` feature
-  - No integration needed; solver's domain representation is already optimal
-- **Partial evaluation**: Propagation semantics formalized in solver:
-  - `cage_feasible()`: Bounds checking with partial assignments
-  - `apply_cage_deduction()`: Per-tier domain restriction
-  - Full documentation in `docs/propagation_semantics.md`
+## Explicit open items remaining after this modernization cycle
 
-### Android Example (RESOLVED)
-- **Skeleton created** (2026-01-01): Full Android app structure with:
-  - `KeenApi.kt`: UniFFI wrapper (JNI loader, external function declarations)
-  - `PuzzleViewModel.kt`: ViewModel for state management (MVVM pattern)
-  - `MainActivity.kt`: Main activity with input controls and result display
-  - `activity_main.xml`: UI layout (grid size, puzzle input, tier selection)
-  - `build.gradle.kts`: App-level gradle config (dependencies, NDK setup)
-  - `settings.gradle.kts`: Project structure config
-  - `AndroidManifest.xml`: App permissions and activities
-  - `README.md`: Complete build and usage guide
-- **Status**: Ready for NDK compilation and deployment
-- **Next step**: Build native libraries via `cargo ndk` and test on Android device
+### Blocked
 
-## Next Actions (Priority Order)
+None.
 
-1. **Extended corpus**: Add Normal/Hard tier puzzles and larger grid sizes (6x6+)
-   - sgt-desc format fully documented; encoding is tractable
-   - Block structure for 6x6: `_61` (61 positions = 2*6*5 + 1)
-   - Tested with cyclic singleton puzzle (parsing, solving, solving verified)
-2. **Android testing**: Build native libraries and test app on device
-   - Install cargo-ndk: `cargo install cargo-ndk --version 3.2.0`
-   - Build: `cargo ndk -t arm64-v8a build --release -p kenken-uniffi`
-   - Verify UI responsiveness and error handling
-3. **Z3 optimization**: Expand Z3 verification to larger corpus
-   - Currently optional feature and ignored test; could add regression tests
-4. **Performance baselines**: Measure release build performance on Android
-5. **Documentation**: Add architecture diagrams and design rationale
+### Deferred
 
-## References
+None.
 
-- `docs/roadmap_2026.md` - Detailed implementation plan
-- `docs/work_done.md` - Current implementation status
-- `docs/plan.md` - Master architecture plan
+### Accepted (monitor)
+
+1. Keep CI/CD disabled while account quota limits remain; re-enable only with an explicit budgeted workflow policy.
+2. Keep SAT native fallback behavior only for performance mode; keep verification/certification callsites on strict mode.
+3. Monitor low-velocity `varisat` upstream health in recurring dependency audits.
+
+## Consistency check
+
+- Dependency and security dispositions align with `docs/dependency_audit.md`.
+- Major-upgrade and defer/monitor decisions align with `docs/adr/0005-major-upgrade-decision-record.md`.
+- Literature evidence/provenance status aligns with `docs/literature/README.md`, `docs/literature/sources.csv`, and `docs/literature/provenance_manifest.csv`.

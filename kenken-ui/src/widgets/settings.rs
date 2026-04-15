@@ -1,7 +1,9 @@
 #![doc = "Settings dialog for theme and accessibility options"]
 
 use gtk4::prelude::*;
-use gtk4::{Adjustment, Box as GtkBox, Button, CheckButton, ComboBoxText, Label, Orientation, Scale, Window};
+use gtk4::{
+    Adjustment, Box as GtkBox, Button, CheckButton, ComboBoxText, Label, Orientation, Scale, Window,
+};
 use std::boxed::Box;
 use std::cell::RefCell;
 use std::rc::Rc;

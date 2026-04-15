@@ -6,27 +6,33 @@ Thank you for interest in contributing to rustykeen! This guide will help you ge
 
 ### Prerequisites
 
-- Rust: `nightly-2026-01-01` or later (pinned in `rust-toolchain.toml`)
+- Rust: `nightly-2026-04-06` (pinned in `rust-toolchain.toml`)
 - For Android: Android NDK, cargo-ndk
 - For profiling: Optional tools (perf, samply, flamegraph)
 
 ### Build & Test
 
 ```bash
+# Show canonical repo tasks
+just
+
+# Canonical local gate
+just ci
+
 # Build all crates
 cargo build
-
-# Run all tests
-cargo test --all-targets
-
-# Run with all optional features
-cargo test --all-features
 
 # Build in release mode (LTO, opt-level=3)
 cargo build --release
 
-# Check code quality
-cargo fmt --check && cargo clippy --all-targets --all-features
+# Individual local gates
+just fmt
+just lint
+just test
+just audit
+just fuzz-check
+just fuzz-outdated
+just fuzz-audit
 ```
 
 ## Code Style Guide
@@ -49,12 +55,12 @@ cargo fmt --check
 
 All clippy warnings must be fixed. The workspace enforces:
 - `warnings = "deny"` - Treat all warnings as errors
-- `unsafe_code = "forbid"` - No `unsafe` except in `kenken-simd` (FFI crate)
+- `unsafe_code = "forbid"` - No `unsafe` except in `kenken-simd`
 
 Run locally:
 
 ```bash
-cargo clippy --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
 ```
 
 ### Naming Conventions
@@ -101,11 +107,14 @@ pub fn solve_one(puzzle: &Puzzle, rules: Ruleset) -> Result<Option<Solution>, So
 ### Running Tests
 
 ```bash
-# Run all tests
-cargo test --all-targets
+# Run the canonical local gate bundle
+just ci
 
-# Run tests with all features
-cargo test --all-features
+# Run the test gate directly
+just test
+
+# Optional matrix spot-check
+cargo test --all-targets --no-default-features
 
 # Run a specific test
 cargo test test_solve_one
@@ -170,16 +179,13 @@ docs/               Documentation (81 files, see docs/INDEX.md)
 
 ```bash
 # Solve a puzzle
-cargo run -p kenken-cli -- solve --n 2 --desc b__,a3a3
+cargo run -p kenken-cli --bin kenken-cli -- solve --n 2 --desc b__,a3a3
 
 # Count solutions
-cargo run -p kenken-cli -- count --n 2 --desc b__,a3a3 --limit 2
-
-# Generate a puzzle
-cargo run -p kenken-cli -- generate --n 4 --difficulty normal
+cargo run -p kenken-cli --bin kenken-cli -- count --n 2 --desc b__,a3a3 --limit 2
 
 # Benchmark puzzles
-cargo run -p kenken-cli -- benchmark --n 4 --count 100
+cargo run -p kenken-cli --bin kenken-cli -- benchmark --n 4 --count 100
 ```
 
 ### Benchmarking
@@ -195,6 +201,11 @@ cargo bench --bench domain_repr
 cargo install flamegraph
 cargo flamegraph --bin kenken-cli -- solve --n 6 --desc ...
 ```
+
+If benchmark or profiling output is worth retaining as evidence, store it under
+`artifacts/` with a sidecar `metadata.json` based on
+`artifacts/METADATA_TEMPLATE.json`. Do not add curated outputs to the repo
+root.
 
 ### Memory Profiling
 
@@ -225,10 +236,11 @@ cp target/aarch64-linux-android/release/libkenken_uniffi.so \
 Before submitting a pull request:
 
 - [ ] Code builds with `cargo build`
-- [ ] Formatting passes: `cargo fmt --check`
-- [ ] Linting passes: `cargo clippy --all-targets --all-features`
-- [ ] Tests pass: `cargo test --all-targets`
-- [ ] Tests pass with all features: `cargo test --all-features`
+- [ ] Canonical local gate passes: `just ci`
+- [ ] Formatting passes: `just fmt`
+- [ ] Linting passes: `just lint`
+- [ ] Tests pass: `just test`
+- [ ] Optional spot-check passes: `cargo test --all-targets --no-default-features`
 - [ ] New public APIs have doc comments
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/)
 - [ ] PR description explains the what and why
@@ -255,7 +267,7 @@ Prefixes:
 
 ## API Stability
 
-The project uses semantic versioning. See [docs/api_stability.md](docs/api_stability.md) for:
+The project uses semantic versioning. See [docs/canonical/api_stability.md](docs/canonical/api_stability.md) for:
 - Stable public API items that are covered by semver
 - Internal implementation details (never breaking)
 - Deprecation policy

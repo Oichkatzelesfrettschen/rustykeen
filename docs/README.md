@@ -1,6 +1,7 @@
 # Documentation Index
 
-This directory contains design documents, architecture notes, and implementation plans for rustykeen.
+This directory contains design documents, architecture notes, operational
+runbooks, and historical research for rustykeen.
 
 ## Quick Start
 
@@ -9,6 +10,26 @@ This directory contains design documents, architecture notes, and implementation
 | Architecture | `architecture.md` | Workspace layout, data flow, threading model |
 | Build & Targets | `target_matrix.md` | Build targets, CPU tuning, cross-compilation |
 | Master Plan | `plan.md` | Synthesized implementation roadmap |
+| Developer Workflow | `canonical/dev_workflow.md` | Canonical local build/test/audit flow |
+| API Policy | `canonical/api_stability.md` | Public API and semantic versioning policy |
+| Bitvec Decision | `canonical/bitvec_decision.md` | Exit criteria for promote/demote/remove |
+| Android Deployment | `runbooks/android_deployment.md` | Android packaging and deployment steps |
+| Taxonomy | `TAXONOMY.md` | Canonical vs runbook vs research vs archive rules |
+
+## Taxonomy
+
+This docs tree is in transition toward four classes:
+
+- `canonical` for current policy and support contracts
+- `runbooks` for operational instructions
+- `research` for exploratory analysis and historical studies
+- `archive` for superseded material
+
+Until files are physically moved, use [`TAXONOMY.md`](TAXONOMY.md) as the
+placement and review policy.
+
+Curated generated evidence should live under `artifacts/` with a sidecar
+`metadata.json` derived from `artifacts/METADATA_TEMPLATE.json`.
 
 ## Core Documentation
 
@@ -41,7 +62,8 @@ This directory contains design documents, architecture notes, and implementation
 - `latin_squares.md` - Latin square constraint background
 
 ### Android & Mobile
-- `android_build.md` - Android build instructions
+- `runbooks/android_build.md` - Android build instructions
+- `runbooks/android_deployment.md` - Android packaging and deployment
 - `android_rust_state.md` - Rust on Android ecosystem state
 - `cargo_mobile2.md` - cargo-mobile2 integration notes
 - `uniffi_codegen.md` - UniFFI code generation
@@ -50,6 +72,7 @@ This directory contains design documents, architecture notes, and implementation
 - `riced_build.md` - Release profile and optimization settings
 - `rust_build_system.md` - Rust build system overview
 - `target_matrix.md` - Build targets and cross-compilation
+- `isa_benchmark_artifact_registry.md` - Reproducible ISA-tier benchmark artifact layout and checks
 
 ### Serialization
 - `rkyv_snapshot_v2.md` - Snapshot v2 design notes

@@ -302,7 +302,7 @@ Returns 1 if unique, >1 if non-unique.
 Optional Z3-based verification (`verify` feature) provides formal proof:
 
 ```rust
-z3_verify::verify_solution_is_unique(n, solution)
+z3_verify::verify_solution_is_unique(&puzzle, solution)
 ```
 
 ## Testing and Validation

@@ -78,3 +78,13 @@ Linux x86_64 tuned v3 (separate artifact):
 
 Android arm64 (requires NDK + cargo-ndk):
 - `cargo ndk -t arm64-v8a build --release -p kenken-cli --all-features`
+
+## Reproducible ISA benchmark artifact registry
+
+Use `docs/isa_benchmark_artifact_registry.md` as the publication contract for:
+
+- `linux-x86-64-v1` build + benchmark artifacts
+- `linux-x86-64-v3` build + benchmark artifacts
+- `linux-aarch64-generic` build + benchmark artifacts
+
+The registry defines required artifact layout, metadata capture (toolchain pin, commit, ISA flags, command lines, timestamp), and verification checks before results are published.

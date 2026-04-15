@@ -6,11 +6,11 @@ license.workspace = true
 publish = false
 
 [dependencies]
-gtk4 = "0.9"
-cairo-rs = "0.20"
-pango = "0.20"
-gdk4 = "0.9"
-glib = "0.20"
+gtk4 = "0.11"
+cairo-rs = "0.22"
+pango = "0.22"
+gdk4 = "0.11"
+glib = "0.22"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -3,7 +3,7 @@ use kenken_core::rules::Ruleset;
 use kenken_solver::{DeductionTier, solve_one_with_deductions};
 /// CPU Flamegraph Profiling Binary
 ///
-/// Generates detailed CPU flamegraphs via perf/pprof for performance analysis.
+/// Generates detailed CPU flamegraphs via perf + cargo flamegraph for performance analysis.
 ///
 /// Usage:
 ///   cargo build --release --bench profile_flames

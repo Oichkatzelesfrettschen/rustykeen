@@ -6,8 +6,8 @@ use kenken_solver::{
     DeductionTier, DifficultyTier, TierRequiredResult, classify_difficulty_from_tier,
     classify_tier_required, count_solutions_up_to_with_deductions,
 };
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::{Rng, RngExt};
 use smallvec::SmallVec;
 
 use crate::GenError;

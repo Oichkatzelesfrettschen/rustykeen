@@ -189,17 +189,17 @@ When recording baselines at future dates:
 
 ---
 
-## CI/CD Integration (Future)
+## Local Regression Automation (Future)
 
-Once baselines are established, integrate into CI:
+Once baselines are established, integrate them into local benchmark workflows:
 
 ```bash
-# In CI workflow:
 cargo bench --bench solver_smoke -- --save-baseline main
 cargo bench --bench solver_smoke -- --baseline main --profile-time 10
 ```
 
-Fail CI if regressions exceed thresholds defined in regression_thresholds.md.
+Investigate regressions against thresholds defined in `regression_thresholds.md`
+as part of the local benchmarking workflow.
 
 ---
 

@@ -1,7 +1,12 @@
 # Rustykeen Documentation Index
 
-**Last Updated:** 2026-01-29
-**Total Documents:** 81 organized across 11 categories
+**Last Updated:** 2026-04-08
+**Status:** Transitional index during docs taxonomy cleanup
+
+This index is no longer treated as an authoritative document count. Use
+[`docs/TAXONOMY.md`](TAXONOMY.md) and [`docs/README.md`](README.md) as the
+current entrypoints while canonical, runbook, research, and archive groupings
+are being established.
 
 This master index provides navigation and cross-references for the comprehensive documentation set covering the rustykeen KenKen solver architecture, optimization work, and deployment pipelines.
 
@@ -132,8 +137,8 @@ Android/iOS deployment and cross-platform support.
 
 ### Android
 
-- [@./android_build.md](android_build.md) - Android NDK build setup
-- [@./android_deployment.md](android_deployment.md) - Android app deployment guide
+- [@./runbooks/android_build.md](runbooks/android_build.md) - Android NDK build setup
+- [@./runbooks/android_deployment.md](runbooks/android_deployment.md) - Android app deployment guide
 - [@./android_rust_state.md](android_rust_state.md) - Current Android integration status
 
 ### Phoronix Test Suite
@@ -172,7 +177,9 @@ Data serialization and puzzle formats.
 
 Stability guarantees and version compatibility.
 
-- [@./api_stability.md](api_stability.md) - Semantic versioning and API stability policy
+- [@./canonical/api_stability.md](canonical/api_stability.md) - Semantic versioning and API stability policy
+- [@./canonical/bitvec_decision.md](canonical/bitvec_decision.md) - Exit criteria for `bitvec` promote/demote/remove
+- [@./cross_target_api_parity_contract.md](cross_target_api_parity_contract.md) - UniFFI/WASM core operation parity contract
 - [@./CLAUDE.md](../CLAUDE.md) - Project-specific guidelines (top-level)
 
 **See also:** [Core Architecture & Design](#core-architecture--design)
@@ -194,7 +201,7 @@ Planning, checklists, and methodologies.
 - [@./plan.md](plan.md) - Implementation plan and roadmap
 - [@./roadmap_2026.md](roadmap_2026.md) - 2026 roadmap with completion status
 - [@./work_done.md](work_done.md) - Completed work tracking (2026-01-29)
-- [@./dev_workflow.md](dev_workflow.md) - Development workflow and best practices
+- [@./canonical/dev_workflow.md](canonical/dev_workflow.md) - Development workflow and best practices
 - [@./checklist.md](checklist.md) - Implementation and verification checklists
 
 ### Audits & Analysis
@@ -220,7 +227,7 @@ Test puzzles and benchmarking data.
 
 **Getting Started:**
 1. Read [@./architecture.md](architecture.md) for system overview
-2. Check [@./dev_workflow.md](dev_workflow.md) for development process
+2. Check [@./canonical/dev_workflow.md](canonical/dev_workflow.md) for development process
 3. Review [@./features.md](features.md) for available features
 
 **Working on Solver:**
@@ -234,7 +241,7 @@ Test puzzles and benchmarking data.
 3. Results: [@./OPTIMIZATION_SUMMARY_2026.md](OPTIMIZATION_SUMMARY_2026.md)
 
 **Deploying to Mobile:**
-1. Android: [@./android_build.md](android_build.md) → [@./android_deployment.md](android_deployment.md)
+1. Android: [@./runbooks/android_build.md](runbooks/android_build.md) → [@./runbooks/android_deployment.md](runbooks/android_deployment.md)
 2. General: [@./feature_gating.md](feature_gating.md), [@./crate_feature_plan.md](crate_feature_plan.md)
 
 **Understanding Puzzle Domain:**
@@ -257,7 +264,7 @@ Test puzzles and benchmarking data.
 - [@./optimization_roadmap.md](optimization_roadmap.md) and Tier docs
 
 **Deployment:**
-- [@./riced_build.md](riced_build.md), [@./android_build.md](android_build.md)
+- [@./riced_build.md](riced_build.md), [@./runbooks/android_build.md](runbooks/android_build.md)
 
 ---
 
@@ -285,7 +292,7 @@ Test puzzles and benchmarking data.
 
 For contribution guidelines, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-For version stability guarantees, see [@./api_stability.md](api_stability.md).
+For version stability guarantees, see [@./canonical/api_stability.md](canonical/api_stability.md).
 
 For project-level rules and practices, see [CLAUDE.md](../CLAUDE.md).
 
@@ -295,5 +302,5 @@ For project-level rules and practices, see [CLAUDE.md](../CLAUDE.md).
 - [Main README](../README.md)
 - [Architectural Overview](architecture.md)
 - [Optimization Roadmap](optimization_roadmap.md)
-- [API Stability](api_stability.md)
+- [API Stability](canonical/api_stability.md)
 - [Work Done (2026-01-29)](work_done.md)

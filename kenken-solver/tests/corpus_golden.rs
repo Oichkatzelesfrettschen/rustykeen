@@ -662,7 +662,7 @@ fn golden_corpus() -> Vec<GoldenPuzzle> {
             desc: "a_aa_a_a_3aa__a_4a__a3_b__aa_4abaa,s5d2m10a7m60a9s2m32a11s3d2a9a11m36d2",
             solutions: 1,
             difficulty: None, // Conservative estimate
-            tier_required: Some(DeductionTier::Hard),
+            tier_required: Some(DeductionTier::Normal),
             solution: Some(&[
                 6, 1, 4, 2, 5, 3, 5, 6, 2, 1, 3, 4, 3, 2, 1, 5, 4, 6, 1, 3, 6, 4, 2, 5, 2, 4, 5, 3,
                 6, 1, 4, 5, 3, 6, 1, 2,

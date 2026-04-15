@@ -28,6 +28,6 @@ path = "src/lib.rs"
 
 [features]
 default = []
-verify-z3 = []
-verify-sat = []
+verify-z3 = ["kenken-solver/verify"]
+verify-sat = ["kenken-solver/sat-varisat"]
 verify-tla = []

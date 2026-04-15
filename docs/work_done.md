@@ -2,13 +2,18 @@
 
 This document is a "what exists today" counterbalance to `docs/plan.md` (what we're building toward).
 
-Last updated: 2026-01-29
+Last updated: 2026-04-06
 
-## Toolchain / CI
-- Toolchain pinned: `rust-toolchain.toml` (`nightly-2026-01-01`)
-- CI aligned to the pinned nightly: `.github/workflows/ci.yml`
-- CI gates: `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`, `cargo test --all-targets`
+## Toolchain / local validation
+- Toolchain pinned: `rust-toolchain.toml` (`nightly-2026-04-06`)
+- CI/CD workflows intentionally removed to stop hosted-runner quota consumption
+- Mandatory local gate: `just ci`
+- Individual local gates: `just fmt`, `just lint`, `just test`, `just audit`
+- Local guardrail script: `./scripts/local_quality_gates.sh` (implementation behind the canonical local gate bundle)
+- Dependency/security audit (2026-04-06): `cargo audit` clean, `cargo outdated` clean (root + transitive)
+- Benchmark dependency overlap consolidated: active graph now uses `criterion 0.8.2` only (no `criterion 0.5.x` line)
 - Fuzz harness: `fuzz/` with `fuzz_sgt_desc_parser` and `fuzz_solver` targets (cargo-fuzz)
+- Durable benchmark and crash artifacts now live under `artifacts/` instead of the repo root
 
 ## Workspace crates (implemented)
 
@@ -34,10 +39,15 @@ Last updated: 2026-01-29
   - Calibration corpus: `kenken-solver/tests/corpus_difficulty.rs`
 - Optional performance/certification modules:
   - `alloc-bumpalo`: bump allocation scratch buffers for propagation
-  - `solver-dlx`: Latin exact-cover utilities via `dlx-rs` (`kenken-solver/src/dlx_latin.rs`)
+  - `solver-dlx`: Latin exact-cover utilities via internal DLX implementation (`kenken-solver/src/dlx.rs` + `kenken-solver/src/dlx_latin.rs`)
   - `sat-varisat`: SAT uniqueness hooks via `varisat`:
     - Latin-only helper (`kenken-solver/src/sat_latin.rs`)
-    - staged cage allowlist encoding with a tuple threshold (`kenken-solver/src/sat_cages.rs`)
+    - staged cage allowlist encoding with tuple threshold policy:
+      - permissive mode with native fallback (`puzzle_uniqueness_via_sat`)
+      - strict fail-closed certification mode (`puzzle_uniqueness_via_sat_strict`)
+      - DIMACS export for external SAT tooling (`export_puzzle_dimacs_strict`)
+  - `verify`: Z3 uniqueness backend now encodes full cage arithmetic constraints (Eq/Add/Mul/Sub/Div) with alternate-model checks (`kenken-solver/src/z3_verify.rs`)
+    - SMT2 export for external proof tooling (`export_puzzle_smt2`)
 
 ### `kenken-gen`
 - Batch solving/uniqueness plumbing:
@@ -53,6 +63,9 @@ Last updated: 2026-01-29
   - conversion to/from `kenken_core::Puzzle`
   - roundtrip test (`kenken-io/src/rkyv_snapshot.rs`)
   - Snapshot v2 added: persists `Ruleset` and provides `decode_snapshot(...)` compatibility entrypoint (`docs/rkyv_snapshot_v2.md`)
+- `format-sgt-desc`: non-binary text backend for portable/auditable snapshots:
+  - encode/decode helpers in `kenken-io/src/sgt_desc_snapshot.rs`
+  - roundtrip test coverage (`sgt_desc_roundtrip`)
 
 ### `kenken-uniffi`
 - UniFFI scaffolding (`kenken-uniffi/build.rs`, `kenken-uniffi/src/keen.udl`)
@@ -60,16 +73,36 @@ Last updated: 2026-01-29
   - solve and count from sgt “desc” (`kenken-uniffi/src/lib.rs`)
   - optional `gen` feature: generate sgt “desc” + return solution grid (`kenken-uniffi/src/lib.rs`)
 
+### `kenken-verify`
+- Verified-solver APIs exposed from crate surface (`kenken-verify/src/lib.rs`)
+- SAT/Z3 agreement interfaces are implemented and tested:
+  - `verify_with_sat(...)` (`kenken-verify/src/sat_interface.rs`)
+  - `verify_with_z3(...)` (`kenken-verify/src/z3_interface.rs`)
+- Strict SAT certification mode is enforced for verification APIs (`puzzle_uniqueness_via_sat_strict`)
+- External proof artifact exports are implemented:
+  - `generate_cnf(...)` for DIMACS CNF
+  - `generate_z3_smt2(...)` for SMT-LIB2
+
 ### `kenken-cli`
-- Reference CLI for solve/count:
+- Reference CLI for solve/count/benchmark:
   - `kenken-cli solve --n N --desc DESC --tier ...`
   - `kenken-cli count --n N --desc DESC --limit ...`
+  - `kenken-cli benchmark --n N --count C --tier ...`
   (`kenken-cli/src/main.rs`)
  - Installs a default tracing subscriber (`kenken-cli/telemetry-subscriber`) so solver/SAT traces are visible without extra wiring.
+
+### `kenken-sdl2`
+- Cross-platform SDL2 demonstration frontend (`kenken-sdl2/src/main.rs`):
+  - keyboard + mouse cell editing
+  - native display-aware initial window sizing
+  - dynamic scaling controls (`+/-`, mouse wheel) and fullscreen toggle (`F11`)
+  - engine-backed solve/uniqueness actions (`S` / `U`)
 
 ## Documentation tooling
 - Crate-level rustdoc uses `#![doc = include_str!("../README.md")]` per crate.
 - mdBook skeleton exists at `docs/book/` for narrative docs.
+- Cross-target API parity contract is documented and drift-tested (`docs/cross_target_api_parity_contract.md`, `kenken-wasm/tests/cross_target_api_parity_contract.rs`).
+- ISA benchmark artifact registry is published (`docs/isa_benchmark_artifact_registry.md`).
 
 ## Cleanroom posture (docs)
 - Operational cleanroom policy: `docs/cleanroom_policy.md`
@@ -81,10 +114,11 @@ Last updated: 2026-01-29
 - Proptest property tests: `kenken-core/tests/prop_cage_semantics.rs` (cage arithmetic invariants)
 - Golden corpus tests: `kenken-solver/tests/corpus_sgt_desc.rs` (2x2, 3x3, 4x4 puzzles with known solution counts)
 - Difficulty calibration tests: `kenken-solver/tests/corpus_difficulty.rs` (tier-required classification validation)
+- Cross-target contract drift tests: `kenken-wasm/tests/cross_target_api_parity_contract.rs`
+- Z3 verification regression tests: `kenken-solver/tests/z3_golden_verify.rs`
 - Fuzz targets: `fuzz/fuzz_targets/` (parser and solver coverage)
 
 ## Major lacunae (next engineering milestones)
-- SAT encoding for full cage arithmetic constraints (not just Latin) and uniqueness proofs that incorporate cages.
 - Generator pipeline hardening (minimization + difficulty scoring + expanded calibration corpus).
 - Expand difficulty calibration corpus with more diverse puzzles (Normal/Hard tier requirements).
 - Stable public API policy (semver, feature gates, versioned snapshot evolution) and compatibility tests at scale.

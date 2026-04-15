@@ -1,8 +1,8 @@
 // Tutorial delivery UI panel for interactive lesson presentation
 
+use crate::tutorial::{Lesson, LessonStep, TutorialProgress};
 use gtk4::prelude::*;
 use gtk4::{Box as GtkBox, Button, Label, Orientation, ScrolledWindow, TextBuffer, TextView};
-use crate::tutorial::{Lesson, TutorialProgress, LessonStep};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -10,7 +10,6 @@ use std::rc::Rc;
 pub struct TutorialPanel {
     container: GtkBox,
     lesson_title: Label,
-    lesson_text: TextView,
     buffer: TextBuffer,
     progress: Rc<RefCell<TutorialProgress>>,
 }
@@ -70,7 +69,6 @@ impl TutorialPanel {
         TutorialPanel {
             container,
             lesson_title,
-            lesson_text,
             buffer,
             progress,
         }
@@ -89,22 +87,24 @@ impl TutorialPanel {
     fn display_current_step(&self) {
         let prog = self.progress.borrow();
 
-        if let Some(lesson_id) = prog.current {
-            if let Some(lesson) = Lesson::get(lesson_id) {
-                let step_num = prog.current_step;
+        if let Some(lesson_id) = prog.current
+            && let Some(lesson) = Lesson::get(lesson_id)
+        {
+            let step_num = prog.current_step;
 
-                // Update title
-                let title = format!("{} - Step {}/{}",
-                    lesson.title,
-                    step_num,
-                    lesson.steps.len());
-                self.lesson_title.set_markup(&format!("<b>{}</b>", title));
+            // Update title
+            let title = format!(
+                "{} - Step {}/{}",
+                lesson.title,
+                step_num,
+                lesson.steps.len()
+            );
+            self.lesson_title.set_markup(&format!("<b>{}</b>", title));
 
-                // Update content
-                if let Some(step) = lesson.step(step_num) {
-                    let content = self.format_step(&lesson, step);
-                    self.buffer.set_text(&content);
-                }
+            // Update content
+            if let Some(step) = lesson.step(step_num) {
+                let content = self.format_step(&lesson, step);
+                self.buffer.set_text(&content);
             }
         }
     }
@@ -115,7 +115,10 @@ impl TutorialPanel {
 
         text.push_str(&format!("LESSON: {}\n", lesson.title));
         text.push_str(&format!("Objective: {}\n", lesson.objective));
-        text.push_str(&format!("Grid Size: {}x{}\n\n", lesson.grid_size, lesson.grid_size));
+        text.push_str(&format!(
+            "Grid Size: {}x{}\n\n",
+            lesson.grid_size, lesson.grid_size
+        ));
 
         text.push_str(&format!("STEP {} of {}\n", step.number, 999)); // Use actual count
         text.push_str("=".repeat(40).as_str());
@@ -156,27 +159,27 @@ impl TutorialPanel {
     pub fn show_hint(&self) {
         let prog = self.progress.borrow();
 
-        if let Some(lesson_id) = prog.current {
-            if let Some(lesson) = Lesson::get(lesson_id) {
-                let step_num = prog.current_step;
+        if let Some(lesson_id) = prog.current
+            && let Some(lesson) = Lesson::get(lesson_id)
+        {
+            let step_num = prog.current_step;
 
-                if let Some(step) = lesson.step(step_num) {
-                    let mut text = String::new();
-                    text.push_str(&self.format_step(&lesson, step));
+            if let Some(step) = lesson.step(step_num) {
+                let mut text = String::new();
+                text.push_str(&self.format_step(&lesson, step));
 
-                    if let Some(hint) = &step.hint {
-                        text.push_str("\n\n");
-                        text.push_str("EXPANDED HINT:\n");
-                        text.push_str("=".repeat(40).as_str());
-                        text.push('\n');
-                        text.push_str(hint);
-                        text.push('\n');
-                    } else {
-                        text.push_str("\n\nNo additional hint available for this step.\n");
-                    }
-
-                    self.buffer.set_text(&text);
+                if let Some(hint) = &step.hint {
+                    text.push_str("\n\n");
+                    text.push_str("EXPANDED HINT:\n");
+                    text.push_str("=".repeat(40).as_str());
+                    text.push('\n');
+                    text.push_str(hint);
+                    text.push('\n');
+                } else {
+                    text.push_str("\n\nNo additional hint available for this step.\n");
                 }
+
+                self.buffer.set_text(&text);
             }
         }
     }
@@ -188,10 +191,7 @@ impl TutorialPanel {
         drop(prog);
 
         let completion = self.get_progress_percent();
-        let msg = format!(
-            "Lesson completed! Tutorial progress: {:.0}%",
-            completion
-        );
+        let msg = format!("Lesson completed! Tutorial progress: {:.0}%", completion);
 
         self.buffer.set_text(&msg);
     }

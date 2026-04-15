@@ -14,13 +14,13 @@ thiserror.workspace = true
 rkyv = { version = "0.8", optional = true }
 
 [features]
-default = ["std"]
+default = ["std", "format-sgt-desc"]
 std = []
 
-# Placeholders
+# Optional backends
 serde = []
 json = []
 toml = []
 io-nom = []
 io-rkyv = ["dep:rkyv"]
-format-sgt-desc = []
+format-sgt-desc = ["kenken-core/format-sgt-desc"]

@@ -1,7 +1,7 @@
 #![doc = "Grid widget for displaying and interacting with KenKen puzzles"]
 
-use gtk4::prelude::*;
 use gtk4::DrawingArea;
+use gtk4::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -75,7 +75,6 @@ impl GridWidget {
             });
     }
 
-
     fn draw_grid(
         context: &cairo::Context,
         width: u32,
@@ -110,7 +109,12 @@ impl GridWidget {
         context.set_source_rgb(0.2, 0.2, 0.2);
 
         // Draw outer border
-        context.rectangle(0.0, 0.0, width as f64 * cell_size, height as f64 * cell_size);
+        context.rectangle(
+            0.0,
+            0.0,
+            width as f64 * cell_size,
+            height as f64 * cell_size,
+        );
         context.stroke().expect("Stroke failed");
 
         // Draw selected cell highlight

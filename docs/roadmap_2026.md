@@ -338,7 +338,7 @@ Record performance on reference hardware:
 ```
 
 #### 6.2 Public API Stability Policy
-**File**: `docs/api_stability.md` (new)
+**File**: `docs/canonical/api_stability.md` (new)
 
 ```markdown
 # API Stability Policy

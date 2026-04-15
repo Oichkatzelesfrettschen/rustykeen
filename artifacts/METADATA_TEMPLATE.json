@@ -1,0 +1,26 @@
+{
+  "artifact_set": "replace-me",
+  "category": "benchmark|profiling|crash|log|other",
+  "created_at": "2026-04-08T00:00:00Z",
+  "created_by": "human-or-script",
+  "command": "replace with exact command",
+  "working_directory": ".",
+  "toolchain": {
+    "rust": "nightly-2026-04-06",
+    "cargo": "capture if relevant",
+    "other_tools": [
+      "list optional external tools here"
+    ]
+  },
+  "source_revision": {
+    "git_head": "replace with commit sha when recorded",
+    "dirty": true
+  },
+  "inputs": [
+    "list important inputs, configs, or datasets"
+  ],
+  "outputs": [
+    "list files produced in this artifact set"
+  ],
+  "notes": "short explanation of what this artifact proves or preserves"
+}

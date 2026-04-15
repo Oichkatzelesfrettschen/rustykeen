@@ -2,6 +2,7 @@
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+use clap::{Parser, Subcommand, ValueEnum};
 use kenken_core::format::sgt_desc::parse_keen_desc;
 use kenken_core::puzzle::{Cage, CellId, Puzzle};
 use kenken_core::rules::{Op, Ruleset};
@@ -25,111 +26,83 @@ fn init_tracing() {
 #[cfg(not(feature = "telemetry-subscriber"))]
 fn init_tracing() {}
 
-fn usage() -> &'static str {
-    "kenken-cli\n\
-\n\
-USAGE:\n\
-  kenken-cli solve --n <N> --desc <DESC> [--tier <none|easy|normal|hard>]\n\
-  kenken-cli count --n <N> --desc <DESC> [--tier <none|easy|normal|hard>] [--limit <L>]\n\
-  kenken-cli benchmark --n <N> --count <C> [--tier <none|easy|normal|hard>]\n\
-\n\
-EXAMPLES:\n\
-  kenken-cli solve --n 2 --desc b__,a3a3 --tier normal\n\
-  kenken-cli count --n 2 --desc b__,a3a3 --limit 2\n\
-  kenken-cli benchmark --n 4 --count 10 --tier normal\n"
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+enum CliTier {
+    None,
+    Easy,
+    Normal,
+    Hard,
 }
 
-fn parse_tier(s: &str) -> Option<DeductionTier> {
-    match s {
-        "none" => Some(DeductionTier::None),
-        "easy" => Some(DeductionTier::Easy),
-        "normal" => Some(DeductionTier::Normal),
-        "hard" => Some(DeductionTier::Hard),
-        _ => None,
+impl From<CliTier> for DeductionTier {
+    fn from(value: CliTier) -> Self {
+        match value {
+            CliTier::None => DeductionTier::None,
+            CliTier::Easy => DeductionTier::Easy,
+            CliTier::Normal => DeductionTier::Normal,
+            CliTier::Hard => DeductionTier::Hard,
+        }
     }
 }
 
-fn parse_arg_value(args: &[String], i: &mut usize) -> Result<String, String> {
-    *i += 1;
-    args.get(*i)
-        .cloned()
-        .ok_or_else(|| "missing value".to_string())
+#[derive(Debug, Parser)]
+#[command(name = "kenken-cli")]
+#[command(about = "Reference CLI for solving, counting, and benchmarking KenKen puzzles")]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    Solve {
+        #[arg(short = 'n', long = "n")]
+        n: u8,
+        #[arg(short = 'd', long = "desc")]
+        desc: String,
+        #[arg(long = "tier", value_enum, default_value_t = CliTier::Normal)]
+        tier: CliTier,
+    },
+    Count {
+        #[arg(short = 'n', long = "n")]
+        n: u8,
+        #[arg(short = 'd', long = "desc")]
+        desc: String,
+        #[arg(long = "tier", value_enum, default_value_t = CliTier::Normal)]
+        tier: CliTier,
+        #[arg(long = "limit", default_value_t = 2)]
+        limit: u32,
+    },
+    Benchmark {
+        #[arg(short = 'n', long = "n")]
+        n: u8,
+        #[arg(long = "count", default_value_t = 1)]
+        count: u32,
+        #[arg(long = "tier", value_enum, default_value_t = CliTier::Normal)]
+        tier: CliTier,
+    },
 }
 
 fn main() {
     init_tracing();
     if let Err(err) = run() {
-        eprintln!("{err}\n\n{}", usage());
+        eprintln!("{err}");
         std::process::exit(2);
     }
 }
 
 fn run() -> Result<(), String> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        return Err("missing command".to_string());
-    }
-
-    let cmd = args[1].as_str();
-    let mut n: Option<u8> = None;
-    let mut desc: Option<String> = None;
-    let mut tier: DeductionTier = DeductionTier::Normal;
-    let mut limit: u32 = 2;
-    let mut count: u32 = 1;
-
-    let mut i = 2usize;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--n" | "-n" => {
-                let v = parse_arg_value(&args, &mut i)?;
-                n = Some(v.parse::<u8>().map_err(|_| "invalid --n".to_string())?);
-            }
-            "--desc" | "-d" => {
-                desc = Some(parse_arg_value(&args, &mut i)?);
-            }
-            "--tier" => {
-                let v = parse_arg_value(&args, &mut i)?;
-                tier = parse_tier(&v).ok_or_else(|| "invalid --tier".to_string())?;
-            }
-            "--limit" => {
-                let v = parse_arg_value(&args, &mut i)?;
-                limit = v
-                    .parse::<u32>()
-                    .map_err(|_| "invalid --limit".to_string())?;
-            }
-            "--count" => {
-                let v = parse_arg_value(&args, &mut i)?;
-                count = v
-                    .parse::<u32>()
-                    .map_err(|_| "invalid --count".to_string())?;
-            }
-            "--help" | "-h" => {
-                println!("{}", usage());
-                return Ok(());
-            }
-            other => {
-                return Err(format!("unknown arg: {other}"));
-            }
-        }
-        i += 1;
-    }
-
-    let Some(n) = n else {
-        return Err("missing required flag: --n".to_string());
-    };
+    let cli = Cli::parse();
 
     let rules = Ruleset::keen_baseline();
 
-    match cmd {
-        "solve" => {
-            let Some(desc) = desc else {
-                return Err("'solve' requires --desc".to_string());
-            };
+    match cli.command {
+        Command::Solve { n, desc, tier } => {
             let Ok(puzzle) = parse_keen_desc(n, &desc) else {
                 return Err("failed to parse --desc".to_string());
             };
 
-            let sol = solve_one_with_deductions(&puzzle, rules, tier).unwrap_or(None);
+            let sol = solve_one_with_deductions(&puzzle, rules, tier.into()).unwrap_or(None);
             let Some(sol) = sol else {
                 println!("no-solution");
                 return Ok(());
@@ -145,23 +118,22 @@ fn run() -> Result<(), String> {
                 println!("{line}");
             }
         }
-        "count" => {
-            let Some(desc) = desc else {
-                return Err("'count' requires --desc".to_string());
-            };
+        Command::Count {
+            n,
+            desc,
+            tier,
+            limit,
+        } => {
             let Ok(puzzle) = parse_keen_desc(n, &desc) else {
                 return Err("failed to parse --desc".to_string());
             };
 
-            let cnt =
-                count_solutions_up_to_with_deductions(&puzzle, rules, tier, limit).unwrap_or(0);
+            let cnt = count_solutions_up_to_with_deductions(&puzzle, rules, tier.into(), limit)
+                .unwrap_or(0);
             println!("{cnt}");
         }
-        "benchmark" => {
-            benchmark_puzzles(n, count, tier, rules)?;
-        }
-        _ => {
-            return Err(format!("unknown command: {cmd}"));
+        Command::Benchmark { n, count, tier } => {
+            benchmark_puzzles(n, count, tier.into(), rules)?;
         }
     }
 

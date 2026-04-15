@@ -126,7 +126,7 @@ These changes are **not** considered breaking:
 
 ## Minimum Supported Rust Version (MSRV)
 
-- Current MSRV: None (nightly-2026-01-01 required)
+- Current MSRV: None (nightly-2026-04-06 required)
 - Post-v1.0: MSRV will be set to latest stable at v1.0 release
 - MSRV bumps require a minor version increment
 - Nightly features may be used behind feature flags
@@ -173,11 +173,11 @@ These changes are **not** considered breaking:
 ### Rust Version Support
 
 Post-v1.0, the minimum supported Rust version (MSRV) will be documented.
-Currently nightly-2026-01-01 is required.
+Currently nightly-2026-04-06 is required.
 
 | Rust Version | Status |
 |--------------|--------|
-| nightly-2026-01-01+ | Required (current) |
+| nightly-2026-04-06 | Required (current pin) |
 | Post-v1.0 MSRV | TBD (will be latest stable at v1.0) |
 | Older versions | Not supported |
 
@@ -210,7 +210,7 @@ Officially supported feature combinations:
 
 | Dependency | Constraint | Rationale |
 |------------|-----------|-----------|
-| Rust | nightly-2026-01-01+ | Requires latest nightly |
+| Rust | nightly-2026-04-06 | Pinned in rust-toolchain.toml |
 | rand_chacha | 0.9 | Reproducible RNG |
 | smallvec | workspace defined | Core type |
 | thiserror | workspace defined | Error handling |

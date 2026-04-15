@@ -130,8 +130,17 @@ impl GridRenderer {
         let grid_size = self.grid_size as usize;
 
         // Draw grid background
-        ctx.set_source_rgb(self.colors.background.0, self.colors.background.1, self.colors.background.2);
-        ctx.rectangle(0.0, 0.0, (grid_size as f64) * self.cell_size, (grid_size as f64) * self.cell_size);
+        ctx.set_source_rgb(
+            self.colors.background.0,
+            self.colors.background.1,
+            self.colors.background.2,
+        );
+        ctx.rectangle(
+            0.0,
+            0.0,
+            (grid_size as f64) * self.cell_size,
+            (grid_size as f64) * self.cell_size,
+        );
         ctx.fill()?;
 
         // Draw cells with state-based coloring
@@ -162,7 +171,13 @@ impl GridRenderer {
     }
 
     /// Draw a single cell with visualization state.
-    fn draw_cell(&self, ctx: &Context, row: usize, col: usize, state: CellState) -> Result<(), cairo::Error> {
+    fn draw_cell(
+        &self,
+        ctx: &Context,
+        row: usize,
+        col: usize,
+        state: CellState,
+    ) -> Result<(), cairo::Error> {
         let x = (col as f64) * self.cell_size;
         let y = (row as f64) * self.cell_size;
         let inner_size = self.cell_size - (2.0 * self.padding);
@@ -184,7 +199,12 @@ impl GridRenderer {
 
         // Draw selection highlight if selected
         if state == CellState::Selected {
-            ctx.set_source_rgba(self.colors.selected.0, self.colors.selected.1, self.colors.selected.2, 0.3);
+            ctx.set_source_rgba(
+                self.colors.selected.0,
+                self.colors.selected.1,
+                self.colors.selected.2,
+                0.3,
+            );
             ctx.set_line_width(3.0);
             ctx.rectangle(x + self.padding, y + self.padding, inner_size, inner_size);
             ctx.stroke()?;
@@ -194,7 +214,13 @@ impl GridRenderer {
     }
 
     /// Draw a ripple effect emanating from a cell (for propagation visualization).
-    pub fn draw_ripple(&self, ctx: &Context, cell: CellId, intensity: f64, grid_size: u8) -> Result<(), cairo::Error> {
+    pub fn draw_ripple(
+        &self,
+        ctx: &Context,
+        cell: CellId,
+        intensity: f64,
+        grid_size: u8,
+    ) -> Result<(), cairo::Error> {
         let grid_usize = grid_size as usize;
         let row = (cell.0 as usize) / grid_usize;
         let col = (cell.0 as usize) % grid_usize;
@@ -217,7 +243,13 @@ impl GridRenderer {
     }
 
     /// Draw depth indicator showing search tree depth.
-    pub fn draw_depth_indicator(&self, ctx: &Context, depth: u32, max_depth: u32, canvas_width: f64) -> Result<(), cairo::Error> {
+    pub fn draw_depth_indicator(
+        &self,
+        ctx: &Context,
+        depth: u32,
+        max_depth: u32,
+        canvas_width: f64,
+    ) -> Result<(), cairo::Error> {
         let y_pos = (self.grid_size as f64 + 1.0) * self.cell_size + 20.0;
         let bar_width = canvas_width - 40.0;
         let bar_height = 20.0;
@@ -273,7 +305,10 @@ mod tests {
         assert_eq!(frame.get_cell_state(cell), CellState::Assigned);
 
         frame.set_cell_state(cell, CellState::Exploring { depth: 3 });
-        assert_eq!(frame.get_cell_state(cell), CellState::Exploring { depth: 3 });
+        assert_eq!(
+            frame.get_cell_state(cell),
+            CellState::Exploring { depth: 3 }
+        );
     }
 
     #[test]

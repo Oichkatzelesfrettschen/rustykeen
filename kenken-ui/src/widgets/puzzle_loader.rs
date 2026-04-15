@@ -1,10 +1,10 @@
 #![doc = "Puzzle file loading and management"]
 
 use gtk4::prelude::*;
-use gtk4::{FileChooserDialog, FileChooserAction, ResponseType};
+use gtk4::{FileChooserAction, FileChooserDialog, ResponseType};
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::fs;
+use std::rc::Rc;
 
 /// Callback type for file loaded
 pub type FileLoadedCallback = Box<dyn Fn(&str)>;
@@ -28,25 +28,27 @@ impl PuzzleLoader {
             Some("Open Puzzle File"),
             Some(parent),
             FileChooserAction::Open,
-            &[("Cancel", ResponseType::Cancel), ("Open", ResponseType::Accept)],
+            &[
+                ("Cancel", ResponseType::Cancel),
+                ("Open", ResponseType::Accept),
+            ],
         );
 
         let on_loaded = Rc::clone(&self.on_loaded);
         dialog.connect_response(move |d, resp| {
-            if resp == ResponseType::Accept {
-                if let Some(file) = d.file() {
-                    if let Some(path) = file.path() {
-                        // Attempt to load puzzle from file
-                        match fs::read_to_string(&path) {
-                            Ok(contents) => {
-                                if let Some(ref callback) = *on_loaded.borrow() {
-                                    callback(&contents);
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to read puzzle file: {}", e);
-                            }
+            if resp == ResponseType::Accept
+                && let Some(file) = d.file()
+                && let Some(path) = file.path()
+            {
+                // Attempt to load puzzle from file
+                match fs::read_to_string(&path) {
+                    Ok(contents) => {
+                        if let Some(ref callback) = *on_loaded.borrow() {
+                            callback(&contents);
                         }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to read puzzle file: {}", e);
                     }
                 }
             }
@@ -66,8 +68,7 @@ impl PuzzleLoader {
 
     /// Load puzzle from file path (non-interactive)
     pub fn load_from_path(&self, path: &str) -> Result<String, String> {
-        fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read file: {}", e))
+        fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))
     }
 }
 

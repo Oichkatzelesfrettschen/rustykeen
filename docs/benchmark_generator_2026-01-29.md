@@ -175,7 +175,7 @@ fi
 
 ## Related Documents
 
-- [docs/benchmark_baselines_2026-01-29.md](benchmark_baselines_2026-01-29.md) - Solver baselines
+- [docs/research/benchmark_baselines_2026-01-29.md](research/benchmark_baselines_2026-01-29.md) - Solver baselines
 - [docs/regression_thresholds.md](regression_thresholds.md) - CI threshold definitions
 - [docs/work_done.md](work_done.md) - Generator status
 - [docs/optimization_roadmap.md](optimization_roadmap.md) - Future optimization work

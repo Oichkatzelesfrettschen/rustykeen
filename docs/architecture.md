@@ -25,6 +25,7 @@ The current workspace is intentionally staged:
   - batch solve/uniqueness APIs (optionally parallel via `rayon`)
   - deterministic RNG plumbing (`seed` module)
 - `kenken-io`: versioned snapshots (currently `rkyv` snapshot v1 behind `io-rkyv`)
+- `kenken-sdl2`: cross-platform SDL2 demonstration frontend (input + scaling + fullscreen)
 - `kenken-uniffi`: UniFFI bindings crate (minimal solve/count surface via sgt “desc”)
 - `kenken-cli`: reference CLI tooling (`solve`/`count` over sgt “desc`)
 
@@ -51,4 +52,4 @@ Future adapters can add:
 
 ## Targets
 - Toolchain pinned in `rust-toolchain.toml`.
-- CI is aligned to the pinned nightly in `.github/workflows/ci.yml`.
+- CI/CD workflows are intentionally disabled to avoid account quota overages; run quality gates locally.

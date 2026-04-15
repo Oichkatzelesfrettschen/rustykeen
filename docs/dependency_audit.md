@@ -1,218 +1,160 @@
-# Dependency Audit
+# Dependency Audit (Cargo + GitHub + GitLab)
 
-This document catalogs external dependencies, identifies candidates for refactoring or internalization, and outlines a migration roadmap to reduce dependency bloat while maintaining functionality.
+Last updated: 2026-04-06
 
-**Last Updated**: 2026-01-29
-**Dependency Count**: ~80 (minimal) to ~270 (all features)
+Related decision record: `docs/adr/0005-major-upgrade-decision-record.md`
 
-## Completion Status
+## Scope and method
 
-**Phase 1.1: Internalize dlx-rs** - COMPLETED (2026-01-29)
-- [x] Implemented Dancing Links algorithm in kenken-solver/src/dlx.rs (~200 LOC)
-- [x] Removed external dlx-rs dependency
-- [x] All 7 DLX tests passing
+This audit covers direct and transitive dependencies for the full workspace (`--all-features`), plus upstream maintenance signals.
+Commands were executed with the pinned toolchain (`nightly-2026-04-06` from `rust-toolchain.toml`).
 
-**Phase 1.2: Internalize likely_stable** - COMPLETED (2026-01-29)
-- [x] Implemented hints.rs module in kenken-core (~120 LOC)
-- [x] Removed likely_stable dependency
-- [x] All builds successful with no regressions
+Commands used:
 
-**Phase 1.3: Bit Vector Consolidation** - COMPLETED (2026-01-29)
-- [x] Removed smallbitvec domain representation (was ~250 LOC)
-- [x] Consolidated to FixedBitSet as canonical external heap option
-- [x] Updated benchmarks to remove SmallBitDomain references
-
----
-
-## Dependency Categories
-
-### 1. C/FFI Dependencies (Require System Libraries)
-
-These dependencies require external C libraries or build toolchains:
-
-| Dependency | Purpose | Feature Gate | System Requirement |
-|------------|---------|--------------|-------------------|
-| `z3` / `z3-sys` | SMT solver for formal verification | `verify` | libz3, LLVM/Clang |
-| `mimalloc` / `libmimalloc-sys` | High-performance allocator | `alloc-mimalloc` | C compiler |
-| `pprof` + `bindgen` | CPU profiling with flamegraphs | dev-dependency | LLVM/Clang |
-
-**Recommendation**: Keep all as optional. Z3 has no pure Rust equivalent. Mimalloc is performance-only. Pprof is dev-only.
-
-### 2. Heavy Dependencies
-
-Dependencies with large transitive dependency trees:
-
-| Dependency | Transitive Deps | Purpose | Alternative |
-|------------|-----------------|---------|-------------|
-| `uniffi` | ~40 crates | Kotlin/Swift FFI bindings | None (required for mobile) |
-| `criterion` | ~20 crates | Benchmarking framework | `divan` (~5 crates) |
-| `rkyv` | ~15 crates | Zero-copy serialization | `postcard` (~3 crates) |
-| `varisat` | ~10 crates | SAT solver | Keep (pure Rust, optional) |
-| `pprof` | ~25 crates | CPU profiling | External profiler (perf, samply) |
-
-### 3. Candidates for Internalization
-
-Dependencies simple enough to reimplement in-house:
-
-| Dependency | Est. LOC | Current Usage | Internalization Benefit |
-|------------|----------|---------------|------------------------|
-| `dlx-rs` | ~200 | DLX Latin solver | Customize for KenKen; remove dep |
-| `likely_stable` | ~50 | Branch hints | Trivial macros; inline |
-| `smallbitvec` | ~300 | Bit vector | Consolidate with Domain types |
-| `fixedbitset` | ~400 | Bit set | Consolidate with Domain types |
-
-### 4. Core Dependencies (Keep)
-
-Essential dependencies that should remain:
-
-| Dependency | Justification |
-|------------|---------------|
-| `rand` / `rand_chacha` | Industry standard; determinism via ChaCha20 |
-| `smallvec` | Widely used, well-optimized, small |
-| `thiserror` | Ergonomic error handling, minimal overhead |
-| `serde` / `serde_json` | De facto serialization standard |
-| `tracing` | Structured logging/instrumentation |
-
----
-
-## Migration Roadmap
-
-### Phase 1: Immediate (Low Effort, High Impact)
-
-**Goal**: Remove unnecessary dependencies without breaking changes.
-
-1. **Internalize `dlx-rs`**
-   - Create `kenken-solver/src/dlx.rs`
-   - Implement Dancing Links algorithm (~200 LOC)
-   - Remove `dlx-rs` dependency
-   - Benefit: One less external dep; can optimize for KenKen
-
-2. **Internalize `likely_stable`**
-   - Create `kenken-core/src/hints.rs`
-   - Define `likely!()` and `unlikely!()` macros
-   - Remove `likely_stable` dependency
-   - Benefit: Trivial code; no maintenance burden
-
-3. **Isolate `pprof` to dev-only**
-   - Ensure pprof is only in `[dev-dependencies]`
-   - Remove from any runtime paths
-   - Benefit: Reduces release build deps by ~25 crates
-
-### Phase 2: Consolidation (Medium Effort)
-
-**Goal**: Unify overlapping functionality.
-
-4. **Unify bit vector types**
-   - Consolidate `smallbitvec`, `fixedbitset`, `bitvec` usage
-   - Extend `Domain32`/`Domain64`/`Domain128`/`Domain256` abstractions
-   - Create unified `DomainOps` implementations
-   - Remove redundant bit vector dependencies
-
-5. **Evaluate `criterion` replacement**
-   - Consider `divan` for lighter benchmarks
-   - Or use custom harness with `std::time::Instant`
-   - Benefit: Reduces dev-dependency bloat by ~15 crates
-
-6. **Evaluate `rkyv` replacement**
-   - Consider `postcard` for simpler binary serialization
-   - Current rkyv usage is limited to snapshot format
-   - Benefit: Simpler serialization, fewer dependencies
-
-### Phase 3: Long-term (Keep As-Is)
-
-**Goal**: Document why certain dependencies are retained.
-
-| Dependency | Reason to Keep |
-|------------|----------------|
-| `z3` | No pure Rust SMT solver with equivalent capability |
-| `uniffi` | Required for Android/iOS platform support |
-| `varisat` | Pure Rust SAT solver; already feature-gated |
-| `rayon` | Industry standard parallelism; feature-gated |
-| `bumpalo` | Arena allocation for hot paths; feature-gated |
-
----
-
-## Dependency Tree Analysis
-
-### Minimal Build (no optional features)
-
-```
-cargo build -p kenken-cli
-Dependencies: ~80 crates
-Build time: ~20s (fresh)
+```bash
+cargo audit
+cargo outdated --workspace --root-deps-only
+cargo outdated --workspace
+cargo tree -d --all-features
+cargo metadata --format-version 1 --all-features
 ```
 
-### Full Build (all features)
+External-source checks:
+- **GitHub** repository health (archival status, recent push activity, issue volume) for high-impact crates.
+- **GitLab** detection for transitive dependencies via `cargo metadata` repository URLs.
+- **crates.io** latest stable version checks for key crates.
 
+## Current status
+
+| Check | Result | Notes |
+|---|---|---|
+| RustSec vulnerabilities | ✅ Clean | `rkyv` updated to `0.8.15`; no active advisories |
+| Outdated direct deps | ✅ None | `cargo outdated --workspace --root-deps-only` clean |
+| Outdated transitive deps | ✅ None | `cargo outdated --workspace` clean |
+| Warnings-as-errors gates | ✅ Passing | `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-targets --all-features` |
+
+## Inventory snapshot (`cargo metadata --format-version 1 --all-features`)
+
+- Resolved package graph: **281** packages total
+  - **11** workspace members
+  - **270** transitive crates
+- Direct external crates declared by workspace manifests: **31**
+- Feature-gated optional direct crates (workspace manifests): `bitvec`, `bumpalo`, `dhat`, `fixedbitset`, `mimalloc`, `rayon`, `rkyv`, `serde`, `static_assertions`, `tracing`, `tracing-flame`, `tracing-subscriber`, `varisat`, `z3`
+- High-impact feature-gated crates remain: `z3`, `varisat`, `rayon`, `mimalloc`, `rkyv`
+
+## Suitability review of major crates
+
+| Crate | Status | Fit assessment |
+|---|---|---|
+| `rand` + `rand_chacha` | Keep | Correct choice for deterministic RNG behavior |
+| `z3` (feature-gated) | Keep | Appropriate for SMT-backed verification and certification |
+| `varisat` (feature-gated) | Keep with watch | API fit is good; upstream is low-velocity, monitor maintenance risk |
+| `uniffi` | Keep | Required for Kotlin/Swift bindings; no comparable lower-cost substitute |
+| GTK stack (`gtk4`, `glib`, `gdk4`, `pango`, `cairo-rs`) | Keep | Appropriate for desktop UI target |
+| `wasm-bindgen` + `serde-wasm-bindgen` | Keep | Correct and standard for web target |
+| `rkyv` | Keep (reassess later) | Good for zero-copy snapshots; now on patched release |
+| `criterion` | Keep | Consolidated on `0.8.2` with no `0.5.x` overlap in the active graph |
+
+## Focused transitive API map (all-features)
+
+Evidence sources for this pass:
+
+```bash
+cargo metadata --format-version 1 --all-features
+cargo tree -d --all-features
 ```
-cargo build -p kenken-cli --all-features
-Dependencies: ~280 crates
-Build time: ~60s (fresh)
+
+Derived map (from resolved graph):
+
+| Area | Crate(s) | Active version(s) | Transitive closure size* | Reach from workspace members |
+|---|---|---|---:|---|
+| Solver / verification | `z3` | `0.20.0` | 3 | via `kenken-solver` consumers |
+| Solver / verification | `varisat` | `0.2.2` | 34 | via `kenken-solver` consumers |
+| Solver / verification | `rkyv` | `0.8.15` | 33 | `kenken-io` only |
+| Runtime / platform | `gtk4`/`glib`/`gdk4`/`pango`/`cairo-rs` | `0.11.2`/`0.22.4`/`0.11.2`/`0.22.4`/`0.22.0` | 64 / 40 / 50 / 44 / 42 | `kenken-ui` |
+| Runtime / platform | `wasm-bindgen` + `serde-wasm-bindgen` | `0.2.117` + `0.6.5` | 11 / 16 | `kenken-wasm` path |
+| Runtime / platform | `uniffi` | `0.31.0` | 90 | `kenken-uniffi` |
+| Benchmark / profiling | `criterion` | `0.8.2` | 55 | dev graph (`kenken-solver` benches) |
+
+\*Closure size = count of unique transitive dependencies reachable from that crate node in the resolved graph.
+
+## Overlap and duplication debt
+
+`cargo tree -d --all-features` now shows **no dual-criterion overlap**. Remaining relevant overlap is:
+
+1. `rand`/`rand_chacha`/`rand_core` dual lines (`0.10` runtime path + `0.9` via `proptest` dev path).
+2. `thiserror` dual major lines (`1.x` via `varisat`, `2.x` via workspace/uniffi path).
+3. `syn` dual major lines (`1.x` and `2.x`) across proc-macro ecosystems.
+4. `toml` dual lines (`0.9` and `1.1`) across toolchain ecosystems.
+
+These are not correctness bugs, but they increase compile surface and cognitive load.
+
+## Non-overlap completeness risks (high-impact)
+
+1. **SAT strict certification mode vs permissive mode is now explicit**
+   - `kenken-solver/src/sat_cages.rs` exposes:
+     - strict fail-closed mode (`puzzle_uniqueness_via_sat_strict`)
+     - permissive mode with native fallback (`puzzle_uniqueness_via_sat`)
+   - **Action**: keep certification code paths on strict mode and monitor permissive fallback rate in performance workloads.
+
+2. **Proof artifact export API surface is implemented**
+   - `kenken-verify/src/sat_interface.rs`: `generate_cnf(...)` emits DIMACS CNF.
+   - `kenken-verify/src/z3_interface.rs`: `generate_z3_smt2(...)` emits SMT-LIB2.
+   - `kenken-solver` contains export backends and golden equivalence checks.
+
+3. **Serialization backend completeness now includes a non-`rkyv` path**
+   - `kenken-io/src/sgt_desc_snapshot.rs` provides SGT text encode/decode as a portable backend.
+   - `io-rkyv` remains the binary snapshot path.
+
+## Recently closed completeness items
+
+1. **Z3 uniqueness encoding now includes full cage arithmetic constraints**
+   - `kenken-solver/src/z3_verify.rs` encodes Eq/Add/Mul/Sub/Div cage semantics plus alternate-model search, and includes verification tests for each op family.
+
+2. **Cross-target API parity contract is now documented and regression-tested**
+   - Contract publication: `docs/cross_target_api_parity_contract.md`
+   - Drift checks: `kenken-wasm/tests/cross_target_api_parity_contract.rs`
+
+## Upstream maintenance signals
+
+High-impact repos were checked via GitHub API:
+
+- Actively maintained in 2026 Q1/Q2: `rand`, `thiserror`, `serde`, `tracing`, `criterion-rs/criterion.rs`, `rkyv`, `z3.rs`, `uniffi-rs`, `wasm-bindgen`, `gtk4-rs`, `gtk-rs-core`, `bumpalo`, `rayon`.
+- Notably lower velocity: `jix/varisat` (last push 2022-11).
+
+GitLab-hosted transitive deps detected:
+- `redox_syscall`
+- `version-compare`
+
+No direct workspace dependency currently points to GitLab.
+
+## Dependency debt register
+
+| Class | Finding | Impact | Disposition |
+|---|---|---|---|
+| Security | `rkyv` advisory previously present (`RUSTSEC-2026-0001`) | UB risk in OOM edge paths | **Resolved** (`rkyv 0.8.15`) |
+| Overlap | Criterion overlap consolidation (`criterion 0.8.2` only; no `0.5.x` line) | Reduced dev graph complexity and tooling drift | **Resolved** |
+| Overlap | Dual `rand` lines from dev tooling | Dev graph complexity | **Accepted** (low risk, dev-only) |
+| Completeness | `kenken-verify` SAT/Z3 uniqueness checks are wired and CNF/SMT2 exports are implemented | Enables external proof artifact workflows | **Resolved** |
+| Completeness | `z3_verify` now encodes full cage semantics with alternate-model check | Removed vacuous uniqueness risk in Z3 path | **Resolved** |
+| Completeness | Cross-target parity contract + drift tests now present (`kenken-uniffi` vs `kenken-wasm`) | Reduces API drift risk across bindings | **Resolved** |
+| Completeness | SAT strict certification mode is implemented while permissive fallback remains available by design | Certification semantics now fail-closed when requested | **Resolved (strict) / Accepted (permissive path)** |
+| Completeness | `kenken-io` now includes SGT text backend in addition to `io-rkyv` | Removes single-backend serialization dependency | **Resolved** |
+| Supply-chain | `varisat` low-velocity upstream | Medium-term maintenance risk | **Open / monitor** |
+| Supply-chain | GitLab transitive nodes | Small governance surface increase | **Accepted** (transitive only) |
+
+## Recommended next actions
+
+1. **SAT mode discipline**: keep verification/certification callsites on strict SAT mode; reserve permissive fallback mode for performance workloads only.
+2. **Parity contract maintenance**: require contract+test updates whenever wasm adds `count`/`generate` APIs.
+3. **Quarterly supply-chain sweep**: rerun the command set above and refresh this document.
+
+## Reproducible re-audit command set
+
+```bash
+cargo audit
+cargo outdated --workspace --root-deps-only
+cargo outdated --workspace
+cargo tree -d --all-features
+cargo metadata --format-version 1 --all-features
 ```
-
-### Bloat Sources
-
-| Feature | Additional Deps | Justification |
-|---------|-----------------|---------------|
-| `uniffi` | +40 | Mobile FFI (required for apps) |
-| `z3` | +30 | Formal verification (optional) |
-| `pprof` | +25 | CPU profiling (dev-only) |
-| `criterion` | +20 | Benchmarking (dev-only) |
-| `rkyv` | +15 | Serialization (optional) |
-
----
-
-## Feature Flag Summary
-
-### kenken-solver
-
-| Feature | Dependencies Added | Purpose |
-|---------|-------------------|---------|
-| `solver-dlx` | dlx-rs | DLX Latin solver |
-| `sat-varisat` | varisat | SAT solver backend |
-| `simd-dispatch` | kenken-simd | Runtime SIMD selection |
-| `alloc-bumpalo` | bumpalo | Arena allocation |
-| `verify` | z3 | SMT verification |
-| `dhat-heap` | dhat | Heap profiling |
-| `tracing` | tracing | Instrumentation |
-| `perf-likely` | likely_stable | Branch hints |
-
-### kenken-gen
-
-| Feature | Dependencies Added | Purpose |
-|---------|-------------------|---------|
-| `gen-dlx` | (via solver) | DLX generation |
-| `parallel-rayon` | rayon | Parallel batch ops |
-
-### kenken-cli
-
-| Feature | Dependencies Added | Purpose |
-|---------|-------------------|---------|
-| `alloc-mimalloc` | mimalloc | Allocator override |
-| `telemetry-subscriber` | tracing-subscriber | Log output |
-
-### kenken-io
-
-| Feature | Dependencies Added | Purpose |
-|---------|-------------------|---------|
-| `io-rkyv` | rkyv | Binary snapshots |
-
----
-
-## Action Items
-
-- [ ] Phase 1.1: Internalize dlx-rs
-- [ ] Phase 1.2: Internalize likely_stable
-- [ ] Phase 1.3: Audit pprof usage
-- [ ] Phase 2.1: Unify bit vector types
-- [ ] Phase 2.2: Evaluate criterion alternatives
-- [ ] Phase 2.3: Evaluate rkyv alternatives
-- [ ] Document rationale for each retained dependency
-
----
-
-## References
-
-- [Cargo Workspaces](https://doc.rust-lang.org/cargo/reference/workspaces.html)
-- [Feature Flags Best Practices](https://doc.rust-lang.org/cargo/reference/features.html)
-- [Dependency Management](https://doc.rust-lang.org/cargo/guide/dependencies.html)

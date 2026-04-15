@@ -8,12 +8,11 @@
 /// - Slice popcount with various patterns
 /// - Performance impact of SIMD dispatch vs direct scalar
 ///
-/// Flamegraph Output:
-/// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
-/// - Run with `cargo bench --bench simd_effectiveness` to generate profiling data
+/// Profiling:
+/// - Run with `cargo bench --bench simd_effectiveness` for Criterion timing data.
+/// - For flamegraphs, use `profile_flames` with `cargo flamegraph`.
 use criterion::{Criterion, criterion_group, criterion_main};
 use kenken_simd::{popcount_u32, popcount_u32_slice_sum, popcount_u64};
-use pprof::criterion::{Output, PProfProfiler};
 
 fn benchmark_popcount_u32_single(c: &mut Criterion) {
     let val = std::hint::black_box(0xDEADBEEFu32);
@@ -53,7 +52,7 @@ fn benchmark_popcount_u32_slice_large(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = Criterion::default();
     targets =
         benchmark_popcount_u32_single,
         benchmark_popcount_u64_single,

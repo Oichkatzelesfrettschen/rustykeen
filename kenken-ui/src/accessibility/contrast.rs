@@ -127,7 +127,11 @@ mod tests {
 
         let ratio = ContrastValidator::contrast_ratio(&white, &black);
         // Max contrast should be close to 21:1
-        assert!(ratio > 20.0, "Black/white ratio should be >20, got {}", ratio);
+        assert!(
+            ratio > 20.0,
+            "Black/white ratio should be >20, got {}",
+            ratio
+        );
     }
 
     #[test]

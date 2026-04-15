@@ -277,7 +277,7 @@ fn z3_verify_golden_corpus() {
         }
 
         // Use Z3 to verify uniqueness
-        match kenken_solver::z3_verify::verify_solution_is_unique(n, solution) {
+        match kenken_solver::z3_verify::verify_solution_is_unique(&puzzle, solution) {
             Ok(()) => {
                 z3_success_count += 1;
             }

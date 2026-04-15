@@ -11,9 +11,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Current Status:");
     println!("  - Rocq/rcoq setup: OK (rocq-9.1.0 installed)");
     println!("  - kenken-verify crate: Created");
-    println!("  - Verified solver stubs: Created");
-    println!("  - Z3 interface: Stub created");
-    println!("  - SAT interface: Stub created");
+    println!("  - Verified solver bridge: Active (native solver-backed)");
+    println!("  - Z3 interface: Wired to kenken-solver verification backend");
+    println!("  - SAT interface: Wired to kenken-solver SAT uniqueness backend");
+    println!("  - CNF/SMT2 export surfaces: Active");
     println!("  - rcoq formalization files: PENDING\n");
 
     println!("Next Steps:");

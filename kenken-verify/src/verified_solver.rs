@@ -12,6 +12,10 @@ use kenken_core::{Cage, Puzzle};
 /// `theorem_verify_solution_correct: ∀ puzzle solution, verify_solution puzzle solution
 /// returns Ok iff solution satisfies all_constraints puzzle`
 pub fn verify_solution(puzzle: &Puzzle, solution: &[u8]) -> Result<(), String> {
+    puzzle
+        .validate(Ruleset::keen_baseline())
+        .map_err(|e| format!("Puzzle validation failed: {e}"))?;
+
     // Check solution length
     if solution.len() != (puzzle.n * puzzle.n) as usize {
         return Err(format!(
@@ -52,19 +56,24 @@ pub fn verify_solution(puzzle: &Puzzle, solution: &[u8]) -> Result<(), String> {
 
     // Check cage constraints
     for cage in &puzzle.cages {
-        verify_cage_constraint(puzzle.n, cage, solution)?;
+        verify_cage_constraint(cage, solution)?;
     }
 
     Ok(())
 }
 
 /// Verify a single cage constraint
-fn verify_cage_constraint(_n: u8, cage: &Cage, solution: &[u8]) -> Result<(), String> {
-    let values: Vec<u8> = cage
+fn verify_cage_constraint(cage: &Cage, solution: &[u8]) -> Result<(), String> {
+    let values = cage
         .cells
         .iter()
-        .map(|cell_id| solution[cell_id.0 as usize])
-        .collect();
+        .map(|cell_id| {
+            solution
+                .get(cell_id.0 as usize)
+                .copied()
+                .ok_or_else(|| format!("Cell {} out of range for solution length", cell_id.0))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
     let target = cage.target;
     let op = cage.op;
@@ -98,15 +107,15 @@ fn verify_cage_constraint(_n: u8, cage: &Cage, solution: &[u8]) -> Result<(), St
             if values.len() != 2 {
                 return Err("Divide cage must have 2 cells".to_string());
             }
-            if values[1] == 0 {
-                return Err("Divide by zero".to_string());
-            }
-            let quot = values[0] / values[1];
-            let rem = values[0] % values[1];
-            if rem != 0 || quot as i32 != target {
+            let (num, den) = if values[0] >= values[1] {
+                (values[0], values[1])
+            } else {
+                (values[1], values[0])
+            };
+            if den == 0 || (num as i32) != (den as i32).saturating_mul(target) {
                 return Err(format!(
-                    "Cage DIV quotient {} or remainder {} invalid",
-                    quot, rem
+                    "Cage DIV pair ({}, {}) does not match target {}",
+                    values[0], values[1], target
                 ));
             }
         }
@@ -128,9 +137,8 @@ fn verify_cage_constraint(_n: u8, cage: &Cage, solution: &[u8]) -> Result<(), St
 /// # Rocq Theorem
 /// `theorem_count_solutions_terminating: ∀ puzzle, WF (count_solutions_up_to puzzle)`
 pub fn count_solutions_up_to(puzzle: &Puzzle, limit: usize) -> Result<usize, String> {
-    // This is a stub that delegates to the solver
-    // In full implementation, this would use a verified counter with
-    // Rocq proof of termination and correctness
+    // Temporary bridge: delegate to the deterministic solver until the
+    // extracted Rocq counting implementation is integrated.
 
     let rules = Ruleset::keen_baseline();
     let limit_u32 = limit.min(u32::MAX as usize) as u32;
@@ -143,12 +151,40 @@ pub fn count_solutions_up_to(puzzle: &Puzzle, limit: usize) -> Result<usize, Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kenken_core::{CellId, rules::Op};
+
+    fn mk_cage(cells: &[u16], op: Op, target: i32) -> Cage {
+        Cage {
+            cells: cells.iter().copied().map(CellId).collect(),
+            op,
+            target,
+        }
+    }
 
     #[test]
     fn test_verify_solution_basic() {
         let puzzle = Puzzle {
             n: 2,
-            cages: vec![],
+            cages: vec![
+                mk_cage(&[0], Op::Eq, 1),
+                mk_cage(&[1], Op::Eq, 2),
+                mk_cage(&[2], Op::Eq, 2),
+                mk_cage(&[3], Op::Eq, 1),
+            ],
+        };
+        let solution = vec![1, 2, 2, 1];
+        assert!(verify_solution(&puzzle, &solution).is_ok());
+    }
+
+    #[test]
+    fn test_verify_solution_division_is_symmetric() {
+        let puzzle = Puzzle {
+            n: 2,
+            cages: vec![
+                mk_cage(&[0, 1], Op::Div, 2),
+                mk_cage(&[2], Op::Eq, 2),
+                mk_cage(&[3], Op::Eq, 1),
+            ],
         };
         let solution = vec![1, 2, 2, 1];
         assert!(verify_solution(&puzzle, &solution).is_ok());

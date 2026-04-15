@@ -78,7 +78,10 @@ impl EventTimelineWidget {
 
         let (event_type, description, details) = self.format_event(&event, idx);
 
-        let line = format!("[{}] {} - {}\n    {}\n", idx, event_type, description, details);
+        let line = format!(
+            "[{}] {} - {}\n    {}\n",
+            idx, event_type, description, details
+        );
 
         let mut end_iter = self.buffer.end_iter();
         self.buffer.insert(&mut end_iter, &line);
@@ -86,7 +89,8 @@ impl EventTimelineWidget {
 
     /// Clear all events.
     pub fn clear(&self) {
-        self.buffer.delete(&mut self.buffer.start_iter(), &mut self.buffer.end_iter());
+        self.buffer
+            .delete(&mut self.buffer.start_iter(), &mut self.buffer.end_iter());
         self.events.borrow_mut().clear();
     }
 
@@ -98,7 +102,10 @@ impl EventTimelineWidget {
 
         for (idx, event) in events.iter() {
             let (etype, desc, details) = self.format_event(event, *idx);
-            text.push_str(&format!("[{}] {} - {}\n    {}\n", idx, etype, desc, details));
+            text.push_str(&format!(
+                "[{}] {} - {}\n    {}\n",
+                idx, etype, desc, details
+            ));
         }
 
         text
@@ -165,7 +172,11 @@ impl EventTimelineWidget {
                 let det = format!("Tier: {}, {} cells", tier_name, affected_cells.len());
                 (desc, det)
             }
-            SolverEvent::Conflict { cell, reason, depth } => {
+            SolverEvent::Conflict {
+                cell,
+                reason,
+                depth,
+            } => {
                 let desc = format!("Conflict at cell {}: {}", cell.0, reason);
                 let det = format!("Depth: {}", depth);
                 (desc, det)

@@ -14,7 +14,7 @@ Complete guide for building and deploying the KenKen Solver Android application 
 ### Required Software
 
 **Rust Toolchain:**
-- Rust nightly (pinned to nightly-2026-01-01 via rust-toolchain.toml)
+- Rust nightly (pinned to nightly-2026-04-06 via rust-toolchain.toml)
 - cargo-ndk v3.2.0
 - Android targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
 
@@ -485,69 +485,25 @@ cargo ndk -t arm64-v8a build --release -p kenken-uniffi --all-features
 - Deduction tier significantly impacts performance
 - Background thread execution prevents ANR (Application Not Responding)
 
-## CI/CD Integration
+## Local Automation Policy
 
-### GitHub Actions Workflow (Recommended)
+Hosted GitHub Actions workflows are intentionally disabled in this repo because
+of quota restrictions. Treat Android builds as local or manually orchestrated
+workflows.
 
-Create `.github/workflows/android.yml`:
+### Recommended Local Sequence
 
-```yaml
-name: Android Build
+```bash
+# Canonical repo validation first
+just ci
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+# Then perform the Android build
+cargo ndk -t arm64-v8a build --release -p kenken-uniffi --all-features
 
-jobs:
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly-2026-01-01
-          target: aarch64-linux-android
-          override: true
-
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk --version 3.2.0
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r25c
-
-      - name: Build native libraries
-        run: |
-          cargo ndk -t arm64-v8a build --release \
-            -p kenken-uniffi --all-features
-
-      - name: Copy libraries to jniLibs
-        run: |
-          mkdir -p examples/android/app/src/main/jniLibs/arm64-v8a
-          cp target/aarch64-linux-android/release/libkenken_uniffi.so \
-             examples/android/app/src/main/jniLibs/arm64-v8a/
-
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Build Android APK
-        run: |
-          cd examples/android
-          ./gradlew assembleDebug
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug.apk
-          path: examples/android/app/build/outputs/apk/debug/app-debug.apk
+# Copy libraries into the Android example project
+mkdir -p examples/android/app/src/main/jniLibs/arm64-v8a
+cp target/aarch64-linux-android/release/libkenken_uniffi.so \
+   examples/android/app/src/main/jniLibs/arm64-v8a/
 ```
 
 ## Security Considerations

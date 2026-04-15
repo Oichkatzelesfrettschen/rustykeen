@@ -1,0 +1,6 @@
+See original compiler ICE snapshot preserved from repo-root cleanup.
+
+Failure summary:
+- rustc coordinator thread spawn failure
+- `Os { code: 11, kind: WouldBlock, message: "Resource temporarily unavailable" }`
+- toolchain reported in original file: `1.94.0-nightly (8d670b93d 2025-12-31)`

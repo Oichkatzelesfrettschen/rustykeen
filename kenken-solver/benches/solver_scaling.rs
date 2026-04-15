@@ -11,14 +11,13 @@
 /// - Solver algorithm scalability
 /// - SIMD effectiveness at each size
 ///
-/// Flamegraph Output:
-/// - CPU flamegraphs generated to target/criterion/*/profile/flamegraph.svg
-/// - Shows which solver components dominate at different grid sizes
+/// Profiling:
+/// - This bench reports Criterion timing distributions.
+/// - Use `profile_flames` + `cargo flamegraph` for CPU flamegraphs.
 use criterion::{Criterion, criterion_group, criterion_main};
 use kenken_core::rules::{Op, Ruleset};
 use kenken_core::{Cage, CellId, Puzzle};
 use kenken_solver::count_solutions_up_to;
-use pprof::criterion::{Output, PProfProfiler};
 use smallvec::smallvec;
 
 fn create_trivial_puzzle(n: u8) -> Puzzle {
@@ -105,7 +104,7 @@ fn benchmark_solve_12x12(c: &mut Criterion) {
 
 criterion_group! {
     name = benches;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = Criterion::default();
     targets =
         benchmark_solve_2x2,
         benchmark_solve_3x3,

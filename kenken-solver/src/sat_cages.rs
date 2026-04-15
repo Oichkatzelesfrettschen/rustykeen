@@ -10,7 +10,7 @@
 use kenken_core::rules::{Op, Ruleset};
 use kenken_core::{Cage, Puzzle};
 use smallvec::SmallVec;
-use varisat::{ExtendFormula, Lit, Solver, Var};
+use varisat::{CnfFormula, ExtendFormula, Lit, Solver, Var, dimacs};
 
 use crate::sat_common::LatinVarMap;
 use crate::sat_latin::SatUniqueness;
@@ -44,7 +44,31 @@ macro_rules! trace {
 /// See `docs/sat_cage_encoding.md` section 3.4 for detailed justification.
 pub const SAT_TUPLE_THRESHOLD: usize = 512;
 
-fn add_eq_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cage: &Cage) -> bool {
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum SatCertificationError {
+    #[error("SAT cage encoding requires rules.sub_div_two_cell_only=true")]
+    UnsupportedRuleset,
+    #[error(
+        "SAT strict certification rejected tuple overflow in cage {cage_index} ({op:?}, {cells} cells), threshold={threshold}"
+    )]
+    TupleOverflow {
+        cage_index: usize,
+        op: Op,
+        cells: usize,
+        threshold: usize,
+    },
+    #[error("SAT cage encoding failed for cage {cage_index} ({op:?}, {cells} cells): {reason}")]
+    InvalidEncoding {
+        cage_index: usize,
+        op: Op,
+        cells: usize,
+        reason: &'static str,
+    },
+    #[error("DIMACS export failed: {0}")]
+    DimacsExport(String),
+}
+
+fn add_eq_cage_clauses(target: &mut impl ExtendFormula, map: &LatinVarMap, cage: &Cage) -> bool {
     if cage.cells.len() != 1 {
         return false;
     }
@@ -55,7 +79,7 @@ fn add_eq_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cage: &Cage) -> b
     if cage.target <= 0 || cage.target > n as i32 {
         return false;
     }
-    solver.add_clause(&[map.lit(row, col, cage.target as usize - 1)]);
+    target.add_clause(&[map.lit(row, col, cage.target as usize - 1)]);
     true
 }
 
@@ -68,7 +92,11 @@ fn allowed_div_pair(a: u8, b: u8, target: i32) -> bool {
     den != 0 && (num as i32) == (den as i32).saturating_mul(target)
 }
 
-fn add_two_cell_sub_div_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cage: &Cage) -> bool {
+fn add_two_cell_sub_div_cage_clauses(
+    target: &mut impl ExtendFormula,
+    map: &LatinVarMap,
+    cage: &Cage,
+) -> bool {
     if cage.cells.len() != 2 {
         return false;
     }
@@ -89,7 +117,7 @@ fn add_two_cell_sub_div_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cag
             if !ok {
                 continue;
             }
-            let s = solver.new_var();
+            let s = target.new_var();
             selectors.push((s, av, bv));
         }
     }
@@ -105,7 +133,7 @@ fn add_two_cell_sub_div_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cag
     );
 
     // At least one selector.
-    solver.add_clause(
+    target.add_clause(
         &selectors
             .iter()
             .map(|(s, _, _)| Lit::from_var(*s, true))
@@ -114,7 +142,7 @@ fn add_two_cell_sub_div_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cag
     // At most one selector (pairwise).
     for i in 0..selectors.len() {
         for j in (i + 1)..selectors.len() {
-            solver.add_clause(&[
+            target.add_clause(&[
                 Lit::from_var(selectors[i].0, false),
                 Lit::from_var(selectors[j].0, false),
             ]);
@@ -122,15 +150,15 @@ fn add_two_cell_sub_div_cage_clauses(solver: &mut Solver, map: &LatinVarMap, cag
     }
     // Selector implies assignments.
     for (s, av, bv) in selectors {
-        solver.add_clause(&[Lit::from_var(s, false), map.lit(ar, ac, av as usize - 1)]);
-        solver.add_clause(&[Lit::from_var(s, false), map.lit(br, bc, bv as usize - 1)]);
+        target.add_clause(&[Lit::from_var(s, false), map.lit(ar, ac, av as usize - 1)]);
+        target.add_clause(&[Lit::from_var(s, false), map.lit(br, bc, bv as usize - 1)]);
     }
 
     true
 }
 
 fn add_tuple_allowlist(
-    solver: &mut Solver,
+    target: &mut impl ExtendFormula,
     map: &LatinVarMap,
     cage: &Cage,
     tuples: &[SmallVec<[u8; 6]>],
@@ -148,11 +176,11 @@ fn add_tuple_allowlist(
     // One selector per tuple, exactly one selector, selector implies assignments.
     let mut selectors: Vec<Var> = Vec::with_capacity(tuples.len());
     for _ in tuples {
-        selectors.push(solver.new_var());
+        selectors.push(target.new_var());
     }
 
     // At least one selector.
-    solver.add_clause(
+    target.add_clause(
         &selectors
             .iter()
             .map(|s| Lit::from_var(*s, true))
@@ -161,7 +189,7 @@ fn add_tuple_allowlist(
     // At most one selector (pairwise).
     for i in 0..selectors.len() {
         for j in (i + 1)..selectors.len() {
-            solver.add_clause(&[
+            target.add_clause(&[
                 Lit::from_var(selectors[i], false),
                 Lit::from_var(selectors[j], false),
             ]);
@@ -177,64 +205,76 @@ fn add_tuple_allowlist(
             if v == 0 || (v as usize) > n {
                 return false;
             }
-            solver.add_clause(&[Lit::from_var(sel, false), map.lit(row, col, v as usize - 1)]);
+            target.add_clause(&[Lit::from_var(sel, false), map.lit(row, col, v as usize - 1)]);
         }
     }
 
     true
 }
 
-/// SAT-based uniqueness check for a full puzzle, currently supporting:
-/// - Latin constraints
-/// - Eq cages
-/// - 2-cell Sub/Div cages (ruleset baseline)
-///
-/// Add/Mul cage encoding is intentionally staged; see `docs/sat_cage_encoding.md`.
-pub fn puzzle_uniqueness_via_sat(puzzle: &Puzzle, rules: Ruleset) -> SatUniqueness {
+fn native_uniqueness_fallback(puzzle: &Puzzle, rules: Ruleset) -> SatUniqueness {
+    match count_solutions_up_to_with_deductions(puzzle, rules, DeductionTier::Hard, 2) {
+        Ok(0) => SatUniqueness::Unsat,
+        Ok(1) => SatUniqueness::Unique,
+        Ok(_) => SatUniqueness::Multiple,
+        Err(_) => SatUniqueness::Multiple,
+    }
+}
+
+fn encode_puzzle_constraints(
+    target: &mut impl ExtendFormula,
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<LatinVarMap, SatCertificationError> {
     if !rules.sub_div_two_cell_only {
-        return SatUniqueness::Multiple;
+        return Err(SatCertificationError::UnsupportedRuleset);
     }
 
     let n = puzzle.n as usize;
     trace!(n, cages = puzzle.cages.len(), "sat.encode.start");
+    let map = LatinVarMap::new(target, n);
+    map.add_latin_constraints(target);
 
-    // If SAT encoding would be too large (tuple explosion), fall back to the native solver
-    // which can still count solutions up to 2 with early exit.
-    let native_fallback =
-        || match count_solutions_up_to_with_deductions(puzzle, rules, DeductionTier::Hard, 2) {
-            Ok(0) => SatUniqueness::Unsat,
-            Ok(1) => SatUniqueness::Unique,
-            Ok(_) => SatUniqueness::Multiple,
-            Err(_) => SatUniqueness::Multiple,
-        };
-
-    // Start from a fresh solver and build the full encoding in one place.
-    let mut solver = Solver::new();
-
-    let map = LatinVarMap::new(&mut solver, n);
-    map.add_latin_constraints(&mut solver);
-
-    // Cage constraints (partial).
-    for cage in &puzzle.cages {
+    for (cage_index, cage) in puzzle.cages.iter().enumerate() {
         match cage.op {
             Op::Eq => {
-                if !add_eq_cage_clauses(&mut solver, &map, cage) {
-                    return SatUniqueness::Unsat;
+                if !add_eq_cage_clauses(target, &map, cage) {
+                    return Err(SatCertificationError::InvalidEncoding {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        reason: "invalid Eq cage",
+                    });
                 }
             }
             Op::Sub | Op::Div => {
                 if rules.sub_div_two_cell_only && cage.cells.len() != 2 {
-                    return SatUniqueness::Unsat;
+                    return Err(SatCertificationError::InvalidEncoding {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        reason: "Sub/Div cage must have exactly two cells",
+                    });
                 }
-                if !add_two_cell_sub_div_cage_clauses(&mut solver, &map, cage) {
-                    return SatUniqueness::Unsat;
+                if !add_two_cell_sub_div_cage_clauses(target, &map, cage) {
+                    return Err(SatCertificationError::InvalidEncoding {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        reason: "invalid Sub/Div cage clauses",
+                    });
                 }
             }
             Op::Add | Op::Mul => {
-                let Ok(maybe) = cage.valid_permutations(puzzle.n, rules, SAT_TUPLE_THRESHOLD)
-                else {
-                    return SatUniqueness::Unsat;
-                };
+                let maybe = cage
+                    .valid_permutations(puzzle.n, rules, SAT_TUPLE_THRESHOLD)
+                    .map_err(|_| SatCertificationError::InvalidEncoding {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        reason: "tuple generation failed",
+                    })?;
+
                 let Some(tuples) = maybe else {
                     trace!(
                         op = ?cage.op,
@@ -242,7 +282,12 @@ pub fn puzzle_uniqueness_via_sat(puzzle: &Puzzle, rules: Ruleset) -> SatUniquene
                         threshold = SAT_TUPLE_THRESHOLD,
                         "sat.encode.tuple_overflow"
                     );
-                    return native_fallback();
+                    return Err(SatCertificationError::TupleOverflow {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        threshold: SAT_TUPLE_THRESHOLD,
+                    });
                 };
                 trace!(
                     op = ?cage.op,
@@ -250,13 +295,22 @@ pub fn puzzle_uniqueness_via_sat(puzzle: &Puzzle, rules: Ruleset) -> SatUniquene
                     tuples = tuples.len(),
                     "sat.encode.tuples"
                 );
-                if !add_tuple_allowlist(&mut solver, &map, cage, &tuples) {
-                    return SatUniqueness::Unsat;
+                if !add_tuple_allowlist(target, &map, cage, &tuples) {
+                    return Err(SatCertificationError::InvalidEncoding {
+                        cage_index,
+                        op: cage.op,
+                        cells: cage.cells.len(),
+                        reason: "tuple allowlist encoding failed",
+                    });
                 }
             }
         }
     }
 
+    Ok(map)
+}
+
+fn solve_uniqueness(mut solver: Solver, map: &LatinVarMap) -> SatUniqueness {
     match solver.solve() {
         Ok(true) => {}
         Ok(false) => return SatUniqueness::Unsat,
@@ -279,6 +333,65 @@ pub fn puzzle_uniqueness_via_sat(puzzle: &Puzzle, rules: Ruleset) -> SatUniquene
     }
 }
 
+/// Strict SAT-based uniqueness check.
+///
+/// Unlike `puzzle_uniqueness_via_sat`, this function fails closed if tuple
+/// overflow would require a native fallback, preserving independent SAT proof
+/// semantics for certification use-cases.
+pub fn puzzle_uniqueness_via_sat_strict(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<SatUniqueness, SatCertificationError> {
+    let mut solver = Solver::new();
+    let map = encode_puzzle_constraints(&mut solver, puzzle, rules)?;
+    Ok(solve_uniqueness(solver, &map))
+}
+
+/// SAT-based uniqueness check for a full puzzle, currently supporting:
+/// - Latin constraints
+/// - Eq cages
+/// - 2-cell Sub/Div cages (ruleset baseline)
+///
+/// Add/Mul cage encoding is intentionally staged; see `docs/sat_cage_encoding.md`.
+///
+/// This permissive variant may fall back to the native solver if tuple
+/// explosion exceeds `SAT_TUPLE_THRESHOLD`.
+pub fn puzzle_uniqueness_via_sat(puzzle: &Puzzle, rules: Ruleset) -> SatUniqueness {
+    match puzzle_uniqueness_via_sat_strict(puzzle, rules) {
+        Ok(result) => result,
+        Err(SatCertificationError::TupleOverflow { .. }) => {
+            native_uniqueness_fallback(puzzle, rules)
+        }
+        Err(SatCertificationError::UnsupportedRuleset) => SatUniqueness::Multiple,
+        Err(SatCertificationError::InvalidEncoding { .. }) => SatUniqueness::Unsat,
+        Err(SatCertificationError::DimacsExport(_)) => SatUniqueness::Unsat,
+    }
+}
+
+/// Build a strict SAT CNF formula for external solvers.
+///
+/// This fails closed on tuple overflow and does not apply native fallbacks.
+pub fn export_puzzle_cnf_strict(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<CnfFormula, SatCertificationError> {
+    let mut formula = CnfFormula::new();
+    let _ = encode_puzzle_constraints(&mut formula, puzzle, rules)?;
+    Ok(formula)
+}
+
+/// Export a puzzle as DIMACS CNF text for external SAT solvers.
+pub fn export_puzzle_dimacs_strict(
+    puzzle: &Puzzle,
+    rules: Ruleset,
+) -> Result<String, SatCertificationError> {
+    let formula = export_puzzle_cnf_strict(puzzle, rules)?;
+    let mut out = Vec::new();
+    dimacs::write_dimacs(&mut out, &formula)
+        .map_err(|e| SatCertificationError::DimacsExport(e.to_string()))?;
+    String::from_utf8(out).map_err(|e| SatCertificationError::DimacsExport(e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,6 +400,79 @@ mod tests {
     use kenken_core::format::sgt_desc::parse_keen_desc;
     use kenken_core::rules::Op;
     use kenken_core::{Cage, CellId, Puzzle};
+    use varisat::{ExtendFormula, Lit, Solver, Var};
+
+    fn classify_dimacs_uniqueness(dimacs_text: &str, n: u8) -> SatUniqueness {
+        let mut solver = Solver::new();
+        solver.add_dimacs_cnf(dimacs_text.as_bytes()).unwrap();
+        match solver.solve() {
+            Ok(true) => {}
+            Ok(false) => return SatUniqueness::Unsat,
+            Err(_) => return SatUniqueness::Unsat,
+        }
+
+        let n_usize = n as usize;
+        let latin_var_count = n_usize * n_usize * n_usize;
+        let model = solver.model().unwrap();
+        let mut assignment = vec![false; latin_var_count];
+        for lit in model {
+            let idx = lit.var().index();
+            if idx < latin_var_count {
+                assignment[idx] = lit.is_positive();
+            }
+        }
+
+        let mut blocking = Vec::with_capacity(n_usize * n_usize);
+        for row in 0..n_usize {
+            for col in 0..n_usize {
+                let mut chosen_var_idx = None;
+                for val0 in 0..n_usize {
+                    let idx = (row * n_usize + col) * n_usize + val0;
+                    if assignment[idx] {
+                        chosen_var_idx = Some(idx);
+                        break;
+                    }
+                }
+                let Some(var_idx) = chosen_var_idx else {
+                    return SatUniqueness::Unsat;
+                };
+                blocking.push(Lit::from_var(Var::from_index(var_idx), false));
+            }
+        }
+
+        solver.add_clause(&blocking);
+        match solver.solve() {
+            Ok(true) => SatUniqueness::Multiple,
+            Ok(false) => SatUniqueness::Unique,
+            Err(_) => SatUniqueness::Unique,
+        }
+    }
+
+    fn mk_tuple_overflow_puzzle() -> Puzzle {
+        let n = 6u8;
+        let n_usize = n as usize;
+        let mut cages = Vec::new();
+
+        cages.push(Cage {
+            cells: (0u16..6u16).map(CellId).collect(),
+            op: Op::Add,
+            target: 21,
+        });
+
+        for row in 1..n_usize {
+            for col in 0..n_usize {
+                let idx = (row * n_usize + col) as u16;
+                let value = ((row + col) % n_usize + 1) as i32;
+                cages.push(Cage {
+                    cells: [CellId(idx)].into_iter().collect(),
+                    op: Op::Eq,
+                    target: value,
+                });
+            }
+        }
+
+        Puzzle { n, cages }
+    }
 
     #[test]
     fn sat_cages_matches_solver_for_small_example() {
@@ -454,5 +640,36 @@ mod tests {
             puzzle_uniqueness_via_sat(&puzzle, rules),
             SatUniqueness::Unique
         );
+    }
+
+    #[test]
+    fn sat_strict_mode_rejects_tuple_overflow() {
+        let puzzle = mk_tuple_overflow_puzzle();
+        let rules = Ruleset::keen_baseline();
+        puzzle.validate(rules).unwrap();
+        let err = puzzle_uniqueness_via_sat_strict(&puzzle, rules).unwrap_err();
+        assert!(matches!(err, SatCertificationError::TupleOverflow { .. }));
+    }
+
+    #[test]
+    fn sat_permissive_mode_falls_back_when_tuple_overflows() {
+        let puzzle = mk_tuple_overflow_puzzle();
+        let rules = Ruleset::keen_baseline();
+        puzzle.validate(rules).unwrap();
+        assert_eq!(
+            puzzle_uniqueness_via_sat(&puzzle, rules),
+            SatUniqueness::Unique
+        );
+    }
+
+    #[test]
+    fn dimacs_export_matches_strict_solver_uniqueness() {
+        let puzzle = parse_keen_desc(2, "b__,a3a3").unwrap();
+        let rules = Ruleset::keen_baseline();
+        let dimacs = export_puzzle_dimacs_strict(&puzzle, rules).unwrap();
+        assert!(dimacs.starts_with("p cnf "));
+        let dimacs_result = classify_dimacs_uniqueness(&dimacs, puzzle.n);
+        let strict_result = puzzle_uniqueness_via_sat_strict(&puzzle, rules).unwrap();
+        assert_eq!(dimacs_result, strict_result);
     }
 }

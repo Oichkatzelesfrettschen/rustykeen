@@ -9,6 +9,10 @@ pub enum IoError {
     #[error(transparent)]
     Rkyv(#[from] rkyv::rancor::Error),
 
+    #[cfg(feature = "format-sgt-desc")]
+    #[error(transparent)]
+    SgtDesc(#[from] kenken_core::format::sgt_desc::SgtDescError),
+
     #[error("invalid snapshot magic")]
     InvalidSnapshotMagic,
 

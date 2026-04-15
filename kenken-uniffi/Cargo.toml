@@ -13,10 +13,10 @@ kenken-core = { path = "../kenken-core" }
 kenken-gen = { path = "../kenken-gen", optional = true }
 kenken-solver = { path = "../kenken-solver" }
 thiserror.workspace = true
-uniffi = "0.30"
+uniffi = "0.31"
 
 [build-dependencies]
-uniffi = { version = "0.30", features = ["build"] }
+uniffi = { version = "0.31", features = ["build"] }
 
 [features]
 default = ["std", "ffi-uniffi"]
