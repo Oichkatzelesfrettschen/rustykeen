@@ -24,6 +24,7 @@ use kenken_core::rules::Ruleset;
 use kenken_solver::{
     DeductionTier, count_solutions_up_to_with_deductions, solve_one_with_deductions,
 };
+use pprof::criterion::{Output, PProfProfiler};
 
 /// Puzzles from the golden corpus for benchmarking.
 fn benchmark_puzzles() -> Vec<(u8, &'static str, &'static str)> {
